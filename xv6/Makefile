@@ -2,8 +2,8 @@ OBJS = \
 	bio.o\
 	console.o\
 	exec.o\
-	file.o\
-	fs.o\
+	fs/file.o\
+	fs/fs.o\
 	ide.o\
 	ioapic.o\
 	kalloc.o\
@@ -19,7 +19,7 @@ OBJS = \
 	string.o\
 	swtch.o\
 	syscall.o\
-	sysfile.o\
+	fs/sysfile.o\
 	sysproc.o\
 	timer.o\
 	trapasm.o\
@@ -27,6 +27,12 @@ OBJS = \
 	uart.o\
 	vectors.o\
 	vm.o\
+
+INCLUDE = ./\
+          fs/\
+          fs/sfs\
+          fs/vfs\
+
 
 # Cross-compiling (e.g., on Mac OS X)
 #TOOLPREFIX = i386-jos-elf-
@@ -75,6 +81,7 @@ OBJDUMP = $(TOOLPREFIX)objdump
 #CFLAGS = -fno-pic -static -fno-builtin -fno-strict-aliasing -O2 -Wall -MD -ggdb -m32 -Werror -fno-omit-frame-pointer
 CFLAGS = -fno-pic -static -fno-builtin -fno-strict-aliasing -Wall -MD -ggdb -m32 -Werror -fno-omit-frame-pointer
 CFLAGS += $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 && echo -fno-stack-protector)
+CFLAGS	+= $(addprefix -I,$(INCLUDE))
 ASFLAGS = -m32 -gdwarf-2 -Wa,-divide
 # FreeBSD ld wants ``elf_i386_fbsd''
 LDFLAGS += -m $(shell $(LD) -V | grep elf_i386 2>/dev/null)
@@ -145,7 +152,7 @@ _forktest: forktest.o $(ULIB)
 	$(LD) $(LDFLAGS) -N -e main -Ttext 0 -o _forktest forktest.o ulib.o usys.o
 	$(OBJDUMP) -S _forktest > forktest.asm
 
-mkfs: mkfs.c fs.h
+mkfs: mkfs.c fs/fs.h
 	gcc -Werror -Wall -o mkfs mkfs.c
 
 # Prevent deletion of intermediate files, e.g. cat.o, after first build, so
@@ -182,6 +189,7 @@ clean:
 	initcode initcode.out kernel xv6.img fs.img kernelmemfs mkfs \
 	.gdbinit \
 	$(UPROGS)
+	rm -f fs/*.o fs/*.d
 
 # make a printout
 FILES = $(shell grep -v '^\#' runoff.list)
