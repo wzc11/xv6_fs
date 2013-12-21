@@ -2,6 +2,7 @@
 #include "stat.h"
 #include "user.h"
 #include "fs.h"
+#include "sfs_inode.h"
 
 char*
 fmtname(char *path)
@@ -27,7 +28,7 @@ ls(char *path)
 {
   char buf[512], *p;
   int fd;
-  struct dirent de;
+  struct sfs_dirent de;
   struct stat st;
   
   if((fd = open(path, 0)) < 0){

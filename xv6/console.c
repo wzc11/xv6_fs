@@ -13,6 +13,7 @@
 #include "mmu.h"
 #include "proc.h"
 #include "x86.h"
+#include "inode.h"
 
 static void consputc(int);
 
@@ -230,14 +231,14 @@ consoleread(struct inode *ip, char *dst, int n)
   uint target;
   int c;
 
-  iunlock(ip);
+  vop_iunlock(ip);
   target = n;
   acquire(&input.lock);
   while(n > 0){
     while(input.r == input.w){
       if(proc->killed){
         release(&input.lock);
-        ilock(ip);
+        vop_ilock(ip);
         return -1;
       }
       sleep(&input.r, &input.lock);
@@ -257,7 +258,7 @@ consoleread(struct inode *ip, char *dst, int n)
       break;
   }
   release(&input.lock);
-  ilock(ip);
+  vop_ilock(ip);
 
   return target - n;
 }
@@ -267,12 +268,12 @@ consolewrite(struct inode *ip, char *buf, int n)
 {
   int i;
 
-  iunlock(ip);
+  vop_iunlock(ip);
   acquire(&cons.lock);
   for(i = 0; i < n; i++)
     consputc(buf[i] & 0xff);
   release(&cons.lock);
-  ilock(ip);
+  vop_ilock(ip);
 
   return n;
 }

@@ -6,6 +6,8 @@
 #include "proc.h"
 #include "spinlock.h"
 #include "buf.h"
+#include "fcntl.h"
+#include "file.h"
 #include "sfs.h"
 #include "sfs_inode.h"
 #include "inode.h"
@@ -13,8 +15,13 @@
 
 #define min(a, b) ((a) < (b) ? (a) : (b))
 static void sfs_itrunc(struct inode*);
-static const struct inode_ops sfs_node_driops;
+static const struct inode_ops sfs_node_dirops;
 static const struct inode_ops sfs_node_fileops;
+
+struct {
+  struct spinlock lock;
+  struct inode inode[NINODE];
+} icache;
 
 /*
  * sfs_get_ops - return function addr of fs_node_dirops/sfs_node_fileops
@@ -22,12 +29,14 @@ static const struct inode_ops sfs_node_fileops;
 static const struct inode_ops *
 sfs_get_ops(uint type) {
     switch (type) {
-    case SFS_TYPE_DIR:
+    case T_DIR:
         return &sfs_node_dirops;
-    case SFS_TYPE_FILE:
+    case T_FILE:
+        return &sfs_node_fileops;
+    case T_DEV:
         return &sfs_node_fileops;
     }
-    panic("invalid file type %d.\n", type);
+    panic("invalid file type");
 }
 
 // Read the super block.
@@ -163,24 +172,17 @@ bfree(int dev, uint b)
 // have locked the inodes involved; this lets callers create
 // multi-step atomic operations.
 
-struct {
-  struct spinlock lock;
-  struct sfs_inode inode[NINODE];
-} icache;
-
 void
 sfs_iinit(void)
 {
   initlock(&icache.lock, "icache");
 }
 
-static struct inode* iget(uint dev, uint inum);
-
 //PAGEBREAK!
 // Allocate a new inode with the given type on device dev.
 // A free inode has a type of zero.
 struct inode*
-sfs_ialloc(uint dev, short type)
+sfs_ialloc(struct inode *dirnode, uint dev, short type)
 {
   int inum;
   struct buf *bp;
@@ -192,15 +194,14 @@ sfs_ialloc(uint dev, short type)
 
   for(inum = 1; inum < sb.ninodes; inum++){
     bp = bread(dev, IBLOCK(inum));
-    dip = (struct dinode*)bp->data + inum%IPB;
+    dip = (struct sfs_dinode*)bp->data + inum%IPB;
     if(dip->type == 0){  // a free inode
       memset(dip, 0, sizeof(*dip));
       dip->type = type;
       log_write(bp);   // mark it allocated on the disk
       brelse(bp);
-      node = sfs_iget(dev, inum);
-      vop_init(node, sfs_get_ops(type));
-      return 
+      node = sfs_iget(dev, inum, type);
+      return node;
     }
     brelse(bp);
   }
@@ -230,19 +231,21 @@ sfs_iupdate(struct inode *ip)
 // Find the inode with number inum on device dev
 // and return the in-memory copy. Does not lock
 // the inode and does not read it from disk.
-static struct inode*
-sfs_iget(uint dev, uint inum)
+struct inode*
+sfs_iget(uint dev, uint inum, short type)
 {
   struct inode *ip, *empty;
-  struct sfs_inode *sip = vop_info(ip, sfs_inode);
-  struct sfs_inode *sempty = vop_info(empty, sfs_inode);
-
+  struct sfs_inode *sip;
+  struct buf *bp;
+  struct sfs_dinode *dip;
+  
   acquire(&icache.lock);
 
   // Is the inode already cached?
   empty = 0;
-  for(sip = &icache.inode[0]; sip < &icache.inode[NINODE]; sip++){
-    if(sip->ref > 0 && sip->dev == dev && sip->inum == inum){
+  for(ip = &icache.inode[0]; ip < &icache.inode[NINODE]; ip++){
+    sip = vop_info(ip, sfs_inode);
+    if(ip->fstype == SFS_INODE && sip->ref > 0 && sip->dev == dev && sip->inum == inum){
       sip->ref++;
       release(&icache.lock);
       return ip;
@@ -256,13 +259,22 @@ sfs_iget(uint dev, uint inum)
     panic("iget: no inodes");
 
   ip = empty;
+  sip = vop_info(ip, sfs_inode);
   sip->dev = dev;
   sip->inum = inum;
   sip->ref = 1;
   sip->flags = 0;
-  vop_init(ip, sfs_get_ops());
+  if(type != 0){
+    sip->type = type;
+  }else{
+    bp = bread(dev, IBLOCK(inum));
+    dip = (struct sfs_dinode*)bp->data + inum%IPB;
+    sip->type = dip->type;
+    brelse(bp);
+  }
   release(&icache.lock);
-
+  vop_init(ip, sfs_get_ops(sip->type), SFS_INODE);
+  
   return ip;
 }
 
@@ -295,10 +307,11 @@ sfs_ilock(struct inode *ip)
     sleep(sin, &icache.lock);
   sin->flags |= I_BUSY;
   release(&icache.lock);
-
+  
   if(!(sin->flags & I_VALID)){
+//    cprintf("dev=%d, inum=%d\n", sin->dev, sin->inum);
     bp = bread(sin->dev, IBLOCK(sin->inum));
-    dip = (struct dinode*)bp->data + sin->inum%IPB;
+    dip = (struct sfs_dinode*)bp->data + sin->inum%IPB;
     sin->type = dip->type;
     sin->major = dip->major;
     sin->minor = dip->minor;
@@ -334,7 +347,7 @@ sfs_iunlock(struct inode *ip)
 void
 sfs_iput(struct inode *ip)
 {
-  struct sfs_inode *sin = vop_info(node, sfs_inode);
+  struct sfs_inode *sin = vop_info(ip, sfs_inode);
   acquire(&icache.lock);
   if(sin->ref == 1 && (sin->flags & I_VALID) && sin->nlink == 0){
     // inode has no links: truncate and free inode.
@@ -357,7 +370,7 @@ sfs_iput(struct inode *ip)
 void
 sfs_iunlockput(struct inode *ip)
 {
-  iunlock(ip);
+  sfs_iunlock(ip);
   sfs_iput(ip);
 }
 
@@ -437,23 +450,11 @@ sfs_itrunc(struct inode *ip)
   sfs_iupdate(ip);
 }
 
-// sfs_openfile - open file (no use)
-static int
-sfs_openfile(struct inode *node, uint open_flags) {
-    return 0;
-}
-
-// sfs_close - close (no use)
-static int
-sfs_close(struct inode *node) {
-    return 0;
-}
-
 // Copy stat information from inode.
 void
 sfs_stati(struct inode *ip, struct stat *st)
 {
-  struct sfs_inode *sin = vop_info(node, sfs_inode); 
+  struct sfs_inode *sin = vop_info(ip, sfs_inode); 
   st->dev = sin->dev;
   st->ino = sin->inum;
   st->type = sin->type;
@@ -466,14 +467,14 @@ sfs_stati(struct inode *ip, struct stat *st)
 int
 sfs_readi(struct inode *ip, char *dst, uint off, uint n)
 {
-  struct sfs_inode *sin = vop_info(node, sfs_inode);
+  struct sfs_inode *sin = vop_info(ip, sfs_inode);
   uint tot, m;
   struct buf *bp;
 
   if(sin->type == T_DEV){
     if(sin->major < 0 || sin->major >= NDEV || !devsw[sin->major].read)
       return -1;
-    return devsw[sin->major].read(sin, dst, n);
+    return devsw[sin->major].read(ip, dst, n);
   }
 
   if(off > sin->size || off + n < off)
@@ -495,14 +496,14 @@ sfs_readi(struct inode *ip, char *dst, uint off, uint n)
 int
 sfs_writei(struct inode *ip, char *src, uint off, uint n)
 {
-  struct sfs_inode *sin = vop_info(node, sfs_inode);
+  struct sfs_inode *sin = vop_info(ip, sfs_inode);
   uint tot, m;
   struct buf *bp;
 
   if(sin->type == T_DEV){
     if(sin->major < 0 || sin->major >= NDEV || !devsw[sin->major].write)
       return -1;
-    return devsw[sin->major].write(sin, src, n);
+    return devsw[sin->major].write(ip, src, n);
   }
 
   if(off > sin->size || off + n < off)
@@ -528,34 +529,32 @@ sfs_writei(struct inode *ip, char *src, uint off, uint n)
 //PAGEBREAK!
 // Directories
 
-int
-namecmp(const char *s, const char *t)
-{
-  return strncmp(s, t, DIRSIZ);
-}
-
 // Look for a directory entry in a directory.
 // If found, set *poff to byte offset of entry.
 struct inode*
 sfs_dirlookup(struct inode *dp, char *name, uint *poff)
 {
+//  cprintf("enter sfs_dirlookup, name=%s\n", name);
   uint off, inum;
-  struct dirent de;
-
-  if(dp->type != T_DIR)
+  struct sfs_dirent de;
+  struct sfs_inode *sdp = vop_info(dp, sfs_inode);
+//  cprintf("inum = %d\n", sdp->inum);
+  if(sdp->type != T_DIR)
     panic("dirlookup not DIR");
 
-  for(off = 0; off < dp->size; off += sizeof(de)){
+  for(off = 0; off < sdp->size; off += sizeof(de)){
     if(sfs_readi(dp, (char*)&de, off, sizeof(de)) != sizeof(de))
       panic("dirlink read");
     if(de.inum == 0)
       continue;
+ //   cprintf("dename = %s", de.name);
     if(namecmp(name, de.name) == 0){
+ //     cprintf("name match\n");
       // entry matches path element
       if(poff)
         *poff = off;
       inum = de.inum;
-      return sfs_iget(dp->dev, inum);
+      return sfs_iget(sdp->dev, inum, 0);
     }
   }
 
@@ -564,20 +563,22 @@ sfs_dirlookup(struct inode *dp, char *name, uint *poff)
 
 // Write a new directory entry (name, inum) into the directory dp.
 int
-sfs_dirlink(struct inode *dp, char *name, uint inum)
+sfs_dirlink(struct inode *dp, char *name, struct inode *originip)
 {
   int off;
-  struct dirent de;
+  struct sfs_dirent de;
   struct inode *ip;
+  struct sfs_inode *sin = vop_info(originip, sfs_inode);
+  struct sfs_inode *sdp = vop_info(dp, sfs_inode);
 
   // Check that name is not present.
-  if((ip = dirlookup(dp, name, 0)) != 0){
+  if((ip = sfs_dirlookup(dp, name, 0)) != 0){
     sfs_iput(ip);
     return -1;
   }
 
   // Look for an empty dirent.
-  for(off = 0; off < dp->size; off += sizeof(de)){
+  for(off = 0; off < sdp->size; off += sizeof(de)){
     if(sfs_readi(dp, (char*)&de, off, sizeof(de)) != sizeof(de))
       panic("dirlink read");
     if(de.inum == 0)
@@ -585,11 +586,52 @@ sfs_dirlink(struct inode *dp, char *name, uint inum)
   }
 
   strncpy(de.name, name, DIRSIZ);
-  de.inum = inum;
+  de.inum = sin->inum;
   if(sfs_writei(dp, (char*)&de, off, sizeof(de)) != sizeof(de))
     panic("dirlink");
   
   return 0;
+}
+
+int
+sfs_unlink(struct inode *dp, char *name){
+  struct inode *ip;
+  struct sfs_dirent de;
+  uint off;
+
+  vop_ilock(dp);
+  // Cannot unlink "." or "..".
+  if(namecmp(name, ".") == 0 || namecmp(name, "..") == 0)
+    goto bad;
+
+  if((ip = vop_dirlookup(dp, name, &off)) == 0)
+    goto bad;
+  vop_ilock(ip);
+
+  if(vop_getnlink(ip) < 1)
+    panic("unlink: nlink < 1");
+  if(vop_gettype(ip) == T_DIR && !vop_isdirempty(ip)){
+    vop_iunlockput(ip);
+    goto bad;
+  }
+
+  memset(&de, 0, sizeof(de));
+  if(vop_write(dp, (char*)&de, off, sizeof(de)) != sizeof(de))
+    panic("unlink: writei");
+  if(vop_gettype(ip) == T_DIR){
+    vop_link_dec(dp);
+    vop_iupdate(dp);
+  }
+  vop_iunlockput(dp);
+
+  vop_link_dec(ip);
+  vop_iupdate(ip);
+  vop_iunlockput(ip);
+  return 0;
+
+  bad:
+    vop_iunlockput(dp);
+    return -1;
 }
 
 //PAGEBREAK!
@@ -636,77 +678,181 @@ skipelem(char *path, char *name)
 // If parent != 0, return the inode for the parent and copy the final
 // path element into name, which must have room for DIRSIZ bytes.
 static struct inode*
-namex(char *path, int nameiparent, char *name)
+namex(struct inode *ip, char *path, int nameiparent, char *name)
 {
-  struct inode *ip, *next;
-  struct sfs_inode *sinp = vop_info(ip, sfs_inode);
-  struct sfs_inode *sinnext = vop_info(next, sfs_inode);
+  struct inode *next;
+  struct sfs_inode *sinp;
 
-  if(*path == '/')
-    ip = sfs_iget(ROOTDEV, ROOTINO);
-  else
-    ip = sfs_idup(proc->cwd);
+//  cprintf("enter namex, path = %s\n",path);
+  sinp = vop_info(ip, sfs_inode);
 
   while((path = skipelem(path, name)) != 0){
-    ilock(ip);
+//    cprintf("path=%s, name=%s\n", path, name);
+    sfs_ilock(ip);
     if(sinp->type != T_DIR){
-      iunlockput(ip);
+      sfs_iunlockput(ip);
       return 0;
     }
     if(nameiparent && *path == '\0'){
       // Stop one level early.
-      iunlock(ip);
+      sfs_iunlock(ip);
       return ip;
     }
-    if((next = dirlookup(ip, name, 0)) == 0){
-      iunlockput(ip);
+    if((next = sfs_dirlookup(ip, name, 0)) == 0){
+      sfs_iunlockput(ip);
       return 0;
     }
-    iunlockput(ip);
+    sfs_iunlockput(ip);
     ip = next;
   }
   if(nameiparent){
     sfs_iput(ip);
     return 0;
   }
+  cprintf("success lookup\n");
   return ip;
 }
 
 struct inode*
-sfs_namei(char *path)
+sfs_namei(struct inode *node, char *path)
 {
   char name[DIRSIZ];
-  return namex(path, 0, name);
+  return namex(node, path, 0, name);
 }
 
 struct inode*
-sfs_nameiparent(char *path, char *name)
+sfs_nameiparent(struct inode *node, char *path, char *name)
 {
-  return namex(path, 1, name);
+  return namex(node, path, 1, name);
+}
+
+// Is the directory dp empty except for "." and ".." ?
+int
+sfs_isdirempty(struct inode *dp)
+{
+  int off;
+  struct sfs_dirent de;
+  struct sfs_inode *sdp = vop_info(dp, sfs_inode);
+
+  for(off=2*sizeof(de); off<sdp->size; off+=sizeof(de)){
+    if(sfs_readi(dp, (char*)&de, off, sizeof(de)) != sizeof(de))
+      panic("isdirempty: readi");
+    if(de.inum != 0)
+      return 0;
+  }
+  return 1;
+}
+
+// Increment reference count for ip.
+// Returns ip to enable ip = idup(ip1) idiom.
+struct inode*
+sfs_link_inc(struct inode *ip)
+{
+  struct sfs_inode *sip = vop_info(ip, sfs_inode);
+  acquire(&icache.lock);
+  sip->nlink++;
+  release(&icache.lock);
+  return ip;
+}
+
+// Increment reference count for ip.
+// Returns ip to enable ip = idup(ip1) idiom.
+struct inode*
+sfs_link_dec(struct inode *ip)
+{
+  struct sfs_inode *sip = vop_info(ip, sfs_inode);
+  acquire(&icache.lock);
+  sip->nlink--;
+  release(&icache.lock);
+  return ip;
+}
+
+struct inode*
+sfs_create_inode(struct inode *dirnode, short type, short major, short minor){
+//  cprintf("enter sfs_create_inode\n");
+  struct sfs_inode *sdirnode = vop_info(dirnode, sfs_inode);
+  struct inode *ip = sfs_ialloc(dirnode, sdirnode->dev, type);
+  struct sfs_inode *sip = vop_info(ip, sfs_inode);
+  vop_ilock(ip);
+  sip->major = major;
+  sip->minor = minor;
+  sip->nlink = 1;
+  vop_iupdate(ip);
+  return ip;
+}
+
+static int
+sfs_opendir(struct inode *node, int open_flags) {
+  if(open_flags & O_RDONLY){
+    return -1;
+  }
+  return 0;
+}
+
+static int
+sfs_openfile(struct inode *node, int open_flags) {
+  return 0;
+}
+
+static short
+sfs_gettype(struct inode *node){
+  struct sfs_inode *snode = vop_info(node, sfs_inode);
+  return snode->type;
+}
+
+static uint
+sfs_getdev(struct inode *node){
+  struct sfs_inode *snode = vop_info(node, sfs_inode);
+  return snode->dev;
+}
+
+static short
+sfs_getnlink(struct inode *node){
+  struct sfs_inode *snode = vop_info(node, sfs_inode);
+  return snode->nlink;
 }
 
 // The sfs specific DIR operations correspond to the abstract operations on a inode.
 static const struct inode_ops sfs_node_dirops = {
     .vop_magic                      = VOP_MAGIC,
-    .vop_close                      = sfs_close,
     .vop_fstat                      = sfs_stati,
-    .vop_fsync                      = sfs_iupdate,
+    .vop_iupdate                    = sfs_iupdate,
+    .vop_ref_inc                    = sfs_idup,
     .vop_ref_dec                    = sfs_iput,
-    .vop_trunc                      = sfs_itrunc,
     .vop_namei                      = sfs_namei,
     .vop_nameiparent                = sfs_nameiparent,
     .vop_dirlink                    = sfs_dirlink,
+    .vop_unlink                     = sfs_unlink,
     .vop_dirlookup                  = sfs_dirlookup,
+    .vop_ilock                      = sfs_ilock,
+    .vop_iunlock                    = sfs_iunlock,
+    .vop_iunlockput                 = sfs_iunlockput,
+    .vop_ialloc                     = sfs_ialloc,
+    .vop_isdirempty                 = sfs_isdirempty,
+    .vop_link_inc                   = sfs_link_inc,
+    .vop_link_dec                   = sfs_link_dec,
+    .vop_create_inode               = sfs_create_inode,
+    .vop_open                       = sfs_opendir,
+    .vop_gettype                    = sfs_gettype,
+    .vop_getdev                     = sfs_getdev,
+    .vop_getnlink                   = sfs_getnlink,
 }; 
 // The sfs specific FILE operations correspond to the abstract operations on a inode.
 static const struct inode_ops sfs_node_fileops = {
     .vop_magic                      = VOP_MAGIC,
-    .vop_open                       = sfs_openfile,
-    .vop_close                      = sfs_close,
     .vop_read                       = sfs_readi,
     .vop_write                      = sfs_writei,
     .vop_fstat                      = sfs_stati,
-    .vop_fsync                      = sfs_iupdate
+    .vop_iupdate                    = sfs_iupdate,
+    .vop_ref_inc                    = sfs_idup,
     .vop_ref_dec                    = sfs_iput,
-    .vop_trunc                      = sfs_itrunc,
+    .vop_ilock                      = sfs_ilock,
+    .vop_iunlock                    = sfs_iunlock,
+    .vop_iunlockput                 = sfs_iunlockput,
+    .vop_link_inc                   = sfs_link_inc,
+    .vop_link_dec                   = sfs_link_dec,
+    .vop_open                       = sfs_openfile,
+    .vop_gettype                    = sfs_gettype,
+    .vop_getdev                     = sfs_getdev,
+    .vop_getnlink                   = sfs_getnlink,
 };

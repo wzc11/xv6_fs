@@ -4,6 +4,7 @@
 #include "spinlock.h"
 #include "fs.h"
 #include "buf.h"
+#include "sfs_inode.h"
 
 // Simple logging. Each system call that might write the file system
 // should be surrounded with begin_trans() and commit_trans() calls.
@@ -56,7 +57,7 @@ initlog(void)
   if (sizeof(struct logheader) >= BSIZE)
     panic("initlog: too big logheader");
 
-  struct superblock sb;
+  struct sfs_super sb;
   initlock(&log.lock, "log");
   readsb(ROOTDEV, &sb);
   log.start = sb.size - sb.nlog;

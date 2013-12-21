@@ -6,6 +6,8 @@
 #include "defs.h"
 #include "x86.h"
 #include "elf.h"
+#include "vfs.h"
+#include "inode.h"
 
 int
 exec(char *path, char **argv)
@@ -17,15 +19,16 @@ exec(char *path, char **argv)
   struct inode *ip;
   struct proghdr ph;
   pde_t *pgdir, *oldpgdir;
-
-  if((ip = namei(path)) == 0)
+  
+  if((ip = vfs_lookup(path)) == 0)
     return -1;
-  ilock(ip);
+  vop_ilock(ip);
   pgdir = 0;
-
+  
   // Check ELF header
-  if(readi(ip, (char*)&elf, 0, sizeof(elf)) < sizeof(elf))
+  if(vop_read(ip, (char*)&elf, 0, sizeof(elf)) < sizeof(elf))
     goto bad;
+
   if(elf.magic != ELF_MAGIC)
     goto bad;
 
@@ -35,7 +38,7 @@ exec(char *path, char **argv)
   // Load program into memory.
   sz = 0;
   for(i=0, off=elf.phoff; i<elf.phnum; i++, off+=sizeof(ph)){
-    if(readi(ip, (char*)&ph, off, sizeof(ph)) != sizeof(ph))
+    if(vop_read(ip, (char*)&ph, off, sizeof(ph)) != sizeof(ph))
       goto bad;
     if(ph.type != ELF_PROG_LOAD)
       continue;
@@ -46,9 +49,9 @@ exec(char *path, char **argv)
     if(loaduvm(pgdir, (char*)ph.vaddr, ip, ph.off, ph.filesz) < 0)
       goto bad;
   }
-  iunlockput(ip);
+  vop_iunlockput(ip);
   ip = 0;
-
+  
   // Allocate two pages at the next page boundary.
   // Make the first inaccessible.  Use the second as the user stack.
   sz = PGROUNDUP(sz);
@@ -67,7 +70,6 @@ exec(char *path, char **argv)
     ustack[3+argc] = sp;
   }
   ustack[3+argc] = 0;
-
   ustack[0] = 0xffffffff;  // fake return PC
   ustack[1] = argc;
   ustack[2] = sp - (argc+1)*4;  // argv pointer
@@ -96,6 +98,6 @@ exec(char *path, char **argv)
   if(pgdir)
     freevm(pgdir);
   if(ip)
-    iunlockput(ip);
+    vop_iunlockput(ip);
   return -1;
 }

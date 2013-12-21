@@ -6,7 +6,8 @@ struct pipe;
 struct proc;
 struct spinlock;
 struct stat;
-struct superblock;
+struct sfs_super;
+struct sfs_inode;
 
 // bio.c
 void            binit(void);
@@ -32,24 +33,9 @@ int             fileread(struct file*, char*, int n);
 int             filestat(struct file*, struct stat*);
 int             filewrite(struct file*, char*, int n);
 
-// fs.c
-void            readsb(int dev, struct superblock *sb);
-int             dirlink(struct inode*, char*, uint);
-struct inode*   dirlookup(struct inode*, char*, uint*);
-struct inode*   ialloc(uint, short);
-struct inode*   idup(struct inode*);
-void            iinit(void);
-void            ilock(struct inode*);
-void            iput(struct inode*);
-void            iunlock(struct inode*);
-void            iunlockput(struct inode*);
-void            iupdate(struct inode*);
-int             namecmp(const char*, const char*);
-struct inode*   namei(char*);
-struct inode*   nameiparent(char*, char*);
-int             readi(struct inode*, char*, uint, uint);
-void            stati(struct inode*, struct stat*);
-int             writei(struct inode*, char*, uint, uint);
+// sfs_inode.c
+void            sfs_iinit(void);
+void            readsb(int dev, struct sfs_super *sb);
 
 // ide.c
 void            ideinit(void);

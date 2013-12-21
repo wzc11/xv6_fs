@@ -6,6 +6,8 @@
 #include "x86.h"
 #include "proc.h"
 #include "spinlock.h"
+#include "inode.h"
+#include "vfs.h"
 
 struct {
   struct spinlock lock;
@@ -97,7 +99,7 @@ userinit(void)
   p->tf->eip = 0;  // beginning of initcode.S
 
   safestrcpy(p->name, "initcode", sizeof(p->name));
-  p->cwd = namei("/");
+  p->cwd = vfs_lookup("/");
 
   p->state = RUNNABLE;
 }
@@ -152,7 +154,7 @@ fork(void)
   for(i = 0; i < NOFILE; i++)
     if(proc->ofile[i])
       np->ofile[i] = filedup(proc->ofile[i]);
-  np->cwd = idup(proc->cwd);
+  np->cwd = vop_ref_inc(proc->cwd);
  
   pid = np->pid;
   np->state = RUNNABLE;
@@ -180,7 +182,7 @@ exit(void)
     }
   }
 
-  iput(proc->cwd);
+  vop_ref_dec(proc->cwd);
   proc->cwd = 0;
 
   acquire(&ptable.lock);
@@ -268,7 +270,7 @@ scheduler(void)
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
       if(p->state != RUNNABLE)
         continue;
-
+      
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
@@ -277,7 +279,7 @@ scheduler(void)
       p->state = RUNNING;
       swtch(&cpu->scheduler, proc->context);
       switchkvm();
-
+    //  cprintf("hello\n");
       // Process is done running for now.
       // It should have changed its p->state before coming back.
       proc = 0;

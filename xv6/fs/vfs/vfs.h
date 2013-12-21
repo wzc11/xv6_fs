@@ -3,17 +3,11 @@
 
 struct inode;
 
-struct fs {
-    union {
-        struct sfs_fs __sfs_info;                   
-    } fs_info;                                     
-    enum {
-        fs_type_sfs_info,
-    } fs_type;                                     
-    int (*fs_sync)(struct fs *fs);                 
-    struct inode *(*fs_get_root)(struct fs *fs);   
-    int (*fs_unmount)(struct fs *fs);              
-    void (*fs_cleanup)(struct fs *fs);           
-};
+int vfs_get_root(const char *devname, struct inode **node_store);
+int vfs_get_curdir(struct inode **dir_store);
+struct inode* vfs_lookup(char *path);
+struct inode* vfs_lookup_parent(char *path, char *name);
+
+int namecmp(const char *s, const char *t);
 
 #endif

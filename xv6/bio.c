@@ -97,10 +97,10 @@ struct buf*
 bread(uint dev, uint sector)
 {
   struct buf *b;
-
   b = bget(dev, sector);
   if(!(b->flags & B_VALID))
     iderw(b);
+
   return b;
 }
 

@@ -6,8 +6,8 @@
 #include <assert.h>
 
 #define stat xv6_stat  // avoid clash with host struct stat
+#include "fs/sfs/sfs_inode.h"
 #include "types.h"
-#include "fs/fs.h"
 #include "stat.h"
 #include "param.h"
 
@@ -19,7 +19,7 @@ int ninodes = 200;
 int size = 1024;
 
 int fsfd;
-struct superblock sb;
+struct sfs_super sb;
 char zeroes[512];
 uint freeblock;
 uint usedblocks;
@@ -28,8 +28,8 @@ uint freeinode = 1;
 
 void balloc(int);
 void wsect(uint, void*);
-void winode(uint, struct dinode*);
-void rinode(uint inum, struct dinode *ip);
+void winode(uint, struct sfs_dinode*);
+void rinode(uint inum, struct sfs_dinode *ip);
 void rsect(uint sec, void *buf);
 uint ialloc(ushort type);
 void iappend(uint inum, void *p, int n);
@@ -62,9 +62,9 @@ main(int argc, char *argv[])
 {
   int i, cc, fd;
   uint rootino, inum, off;
-  struct dirent de;
+  struct sfs_dirent de;
   char buf[512];
-  struct dinode din;
+  struct sfs_dinode din;
 
 
   static_assert(sizeof(int) == 4, "Integers must be 4 bytes!");
@@ -74,8 +74,8 @@ main(int argc, char *argv[])
     exit(1);
   }
 
-  assert((512 % sizeof(struct dinode)) == 0);
-  assert((512 % sizeof(struct dirent)) == 0);
+  assert((512 % sizeof(struct sfs_dinode)) == 0);
+  assert((512 % sizeof(struct sfs_dirent)) == 0);
 
   fsfd = open(argv[1], O_RDWR|O_CREAT|O_TRUNC, 0666);
   if(fsfd < 0){
@@ -177,29 +177,29 @@ i2b(uint inum)
 }
 
 void
-winode(uint inum, struct dinode *ip)
+winode(uint inum, struct sfs_dinode *ip)
 {
   char buf[512];
   uint bn;
-  struct dinode *dip;
+  struct sfs_dinode *dip;
 
   bn = i2b(inum);
   rsect(bn, buf);
-  dip = ((struct dinode*)buf) + (inum % IPB);
+  dip = ((struct sfs_dinode*)buf) + (inum % IPB);
   *dip = *ip;
   wsect(bn, buf);
 }
 
 void
-rinode(uint inum, struct dinode *ip)
+rinode(uint inum, struct sfs_dinode *ip)
 {
   char buf[512];
   uint bn;
-  struct dinode *dip;
+  struct sfs_dinode *dip;
 
   bn = i2b(inum);
   rsect(bn, buf);
-  dip = ((struct dinode*)buf) + (inum % IPB);
+  dip = ((struct sfs_dinode*)buf) + (inum % IPB);
   *ip = *dip;
 }
 
@@ -220,7 +220,7 @@ uint
 ialloc(ushort type)
 {
   uint inum = freeinode++;
-  struct dinode din;
+  struct sfs_dinode din;
 
   bzero(&din, sizeof(din));
   din.type = xshort(type);
@@ -253,7 +253,7 @@ iappend(uint inum, void *xp, int n)
 {
   char *p = (char*)xp;
   uint fbn, off, n1;
-  struct dinode din;
+  struct sfs_dinode din;
   char buf[512];
   uint indirect[NINDIRECT];
   uint x;

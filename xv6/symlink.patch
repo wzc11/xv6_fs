@@ -15,7 +15,7 @@ diff -r f8a4e40ab1d6 fs.c
 +    return 0;
  
    if(*path == '/')
-     ip = iget(ROOTDEV, 1);
+     ip = iget(ROOTDEV, 1, 1);
 +  else if(root)
 +    ip = idup(root);
    else
