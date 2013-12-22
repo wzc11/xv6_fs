@@ -12,8 +12,5 @@ struct inode *
 sfs_get_root(){
 	struct inode *node;
 	node = sfs_iget(ROOTDEV, ROOTINO, T_DIR);
-	cprintf("root type=");
-	int type = vop_gettype(node);
-	cprintf("%d ......", type);
 	return node;
 }

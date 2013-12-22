@@ -85,13 +85,11 @@ get_device(char *path, char **subpath, struct inode **node_store) {
  */
 struct inode*
 vfs_lookup(char *path) {
-  //  cprintf("initpath: %s\n", path);
     int ret;
     struct inode *node;
     if ((ret = get_device(path, &path, &node)) != 0) {
         return 0;
     }
-  //  cprintf("%s\n", path);
     if (*path != '\0') {
         return vop_namei(node, path);
     }

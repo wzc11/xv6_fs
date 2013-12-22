@@ -68,6 +68,7 @@ sys_dup(void)
 int
 sys_read(void)
 {
+  cprintf("  enter sys_read  ");
   struct file *f;
   int n;
   char *p;
@@ -194,7 +195,7 @@ create(char *path, short type, short major, short minor)
   struct inode *ip, *dp;
   char name[DIRSIZ];
   
-  cprintf("enter create, type=%d\n", type);
+//  cprintf("enter create, type=%d\n", type);
   if((dp = vfs_lookup_parent(path, name)) == 0)
     return 0;
   vop_ilock(dp);
@@ -208,12 +209,12 @@ create(char *path, short type, short major, short minor)
     return 0;
   }
 
-  cprintf("before create inode, dpinum=%d\n", vop_gettype(dp));
+//  cprintf("before create inode, dpinum=%d\n", vop_gettype(dp));
 
   if((ip = vop_create_inode(dp, type, major, minor)) == 0)
     panic("create: ialloc");
 
-  cprintf("successful create ip\n");
+//  cprintf("successful create ip\n");
 
   if(type == T_DIR){  // Create . and .. entries.
     vop_link_inc(dp);  // for ".."
@@ -292,7 +293,7 @@ sys_mkdir(void)
 int
 sys_mknod(void)
 {
-  cprintf("enter sys_mknod\n");
+//  cprintf("enter sys_mknod\n");
   struct inode *ip;
   char *path;
   int len;

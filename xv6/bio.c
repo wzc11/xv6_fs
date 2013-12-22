@@ -62,13 +62,12 @@ static struct buf*
 bget(uint dev, uint sector)
 {
   struct buf *b;
-
   acquire(&bcache.lock);
-
  loop:
   // Is the sector already cached?
   for(b = bcache.head.next; b != &bcache.head; b = b->next){
     if(b->dev == dev && b->sector == sector){
+ //     cprintf("     sector=%d, flag=%d",sector,b->flags);
       if(!(b->flags & B_BUSY)){
         b->flags |= B_BUSY;
         release(&bcache.lock);
@@ -100,7 +99,7 @@ bread(uint dev, uint sector)
   b = bget(dev, sector);
   if(!(b->flags & B_VALID))
     iderw(b);
-
+//  cprintf("after iderw");
   return b;
 }
 

@@ -63,7 +63,7 @@ runcmd(struct cmd *cmd)
   struct listcmd *lcmd;
   struct pipecmd *pcmd;
   struct redircmd *rcmd;
-  printf(2, "enter runcmd, type=%d\n", cmd->type);
+//  printf(2, "enter runcmd, type=%d\n", cmd->type);
 
   if(cmd == 0)
     exit();
@@ -147,7 +147,7 @@ main(void)
 {
   static char buf[100];
   int fd;
-  printf(2, "enter into sh.c\n");
+//  printf(2, "enter into sh.c\n");
   // Assumes three file descriptors open.
   while((fd = open("console", O_RDWR)) >= 0){
     if(fd >= 3){

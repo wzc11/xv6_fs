@@ -19,22 +19,23 @@ exec(char *path, char **argv)
   struct inode *ip;
   struct proghdr ph;
   pde_t *pgdir, *oldpgdir;
-  
+//  cprintf("enter lookup1\n");
   if((ip = vfs_lookup(path)) == 0)
+  {
     return -1;
+  }
+//  cprintf("enter lookup2\n");
   vop_ilock(ip);
   pgdir = 0;
   
   // Check ELF header
   if(vop_read(ip, (char*)&elf, 0, sizeof(elf)) < sizeof(elf))
     goto bad;
-
   if(elf.magic != ELF_MAGIC)
     goto bad;
 
   if((pgdir = setupkvm()) == 0)
     goto bad;
-
   // Load program into memory.
   sz = 0;
   for(i=0, off=elf.phoff; i<elf.phnum; i++, off+=sizeof(ph)){
@@ -51,7 +52,6 @@ exec(char *path, char **argv)
   }
   vop_iunlockput(ip);
   ip = 0;
-  
   // Allocate two pages at the next page boundary.
   // Make the first inaccessible.  Use the second as the user stack.
   sz = PGROUNDUP(sz);

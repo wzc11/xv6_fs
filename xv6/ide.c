@@ -126,16 +126,14 @@ void
 iderw(struct buf *b)
 {
   struct buf **pp;
-
+  
   if(!(b->flags & B_BUSY))
     panic("iderw: buf not busy");
   if((b->flags & (B_VALID|B_DIRTY)) == B_VALID)
     panic("iderw: nothing to do");
   if(b->dev != 0 && !havedisk1)
     panic("iderw: ide disk 1 not present");
-
   acquire(&idelock);  //DOC:acquire-lock
-
   // Append b to idequeue.
   b->qnext = 0;
   for(pp=&idequeue; *pp; pp=&(*pp)->qnext)  //DOC:insert-queue
@@ -145,11 +143,11 @@ iderw(struct buf *b)
   // Start disk if necessary.
   if(idequeue == b)
     idestart(b);
-  
+//  cprintf("after idestart iderw flags=%d", b->flags);
   // Wait for request to finish.
   while((b->flags & (B_VALID|B_DIRTY)) != B_VALID){
     sleep(b, &idelock);
   }
-
+//  cprintf("after sleep iderw");
   release(&idelock);
 }
