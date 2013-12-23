@@ -42,19 +42,16 @@ ls(char *path)
   }
   switch(st.type){
   case T_FILE:
-    printf(2, "hello file   ");
     printf(1, "%s %d %d %d\n", fmtname(path), st.type, st.ino, st.size);
     break;
   
   case T_DIR:
-    printf(2, "hello dir   ");
     if(strlen(path) + 1 + DIRSIZ + 1 > sizeof buf){
       printf(1, "ls: path too long\n");
       break;
     }
     strcpy(buf, path);
     p = buf+strlen(buf);
-    printf(2, "p = %s", p);
     *p++ = '/';
     while(read(fd, &de, sizeof(de)) == sizeof(de)){
       if(de.inum == 0)

@@ -68,7 +68,7 @@ sys_dup(void)
 int
 sys_read(void)
 {
-  cprintf("  enter sys_read  ");
+//  cprintf("  enter sys_read  ");
   struct file *f;
   int n;
   char *p;
@@ -125,7 +125,7 @@ sys_link(void)
     return -1;
   if((ip = vfs_lookup(old)) == 0)
     return -1;
-
+  
   begin_trans();
 
   vop_ilock(ip);
@@ -134,7 +134,6 @@ sys_link(void)
     commit_trans();
     return -1;
   }
-
   vop_link_inc(ip);
   vop_iupdate(ip);
   vop_iunlock(ip);

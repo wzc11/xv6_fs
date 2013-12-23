@@ -465,11 +465,11 @@ sfs_stati(struct inode *ip, struct stat *st)
 int
 sfs_readi(struct inode *ip, char *dst, uint off, uint n)
 {
-  cprintf("  enter sfs_readi  ");
+//  cprintf("enter sfs_readi\n");
   struct sfs_inode *sin = vop_info(ip, sfs_inode);
   uint tot, m;
   struct buf *bp;
-
+//  cprintf("inum = %d , type = %d  \n", sin->inum, sin->type);
   if(sin->type == T_DEV){
     if(sin->major < 0 || sin->major >= NDEV || !devsw[sin->major].read)
       return -1;
@@ -816,6 +816,8 @@ sfs_getnlink(struct inode *node){
 // The sfs specific DIR operations correspond to the abstract operations on a inode.
 static const struct inode_ops sfs_node_dirops = {
     .vop_magic                      = VOP_MAGIC,
+    .vop_read                       = sfs_readi,
+    .vop_write                      = sfs_writei,
     .vop_fstat                      = sfs_stati,
     .vop_iupdate                    = sfs_iupdate,
     .vop_ref_inc                    = sfs_idup,
