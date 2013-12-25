@@ -13,5 +13,5 @@ void
 inode_init(struct inode *node, const struct inode_ops *ops, int fstype) {
     node->in_ops = ops;
     node->fstype = fstype;
-    vop_ref_inc(node);
+//    vop_ref_inc(node);
 }

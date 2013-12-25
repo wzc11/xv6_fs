@@ -156,6 +156,7 @@ createtest(void)
     fd = open(name, O_CREATE|O_RDWR);
     close(fd);
   }
+
   name[0] = 'a';
   name[2] = '\0';
   for(i = 0; i < 52; i++){
@@ -376,6 +377,7 @@ sharedfd(void)
     printf(1, "fstests: cannot open sharedfd for writing");
     return;
   }
+
   pid = fork();
   memset(buf, pid==0?'c':'p', sizeof(buf));
   for(i = 0; i < 1000; i++){
@@ -384,6 +386,7 @@ sharedfd(void)
       break;
     }
   }
+  
   if(pid == 0)
     exit();
   else
@@ -394,6 +397,7 @@ sharedfd(void)
     printf(1, "fstests: cannot open sharedfd for reading\n");
     return;
   }
+  
   nc = np = 0;
   while((n = read(fd, buf, sizeof(buf))) > 0){
     for(i = 0; i < sizeof(buf); i++){
@@ -403,6 +407,7 @@ sharedfd(void)
         np++;
     }
   }
+  
   close(fd);
   unlink("sharedfd");
   if(nc == 10000 && np == 10000){
@@ -846,7 +851,7 @@ subdir(void)
     printf(1, "subdir mkdir dd failed\n");
     exit();
   }
-
+  
   fd = open("dd/ff", O_CREATE | O_RDWR);
   if(fd < 0){
     printf(1, "create dd/ff failed\n");
@@ -864,7 +869,7 @@ subdir(void)
     printf(1, "subdir mkdir dd/dd failed\n");
     exit();
   }
-
+  
   fd = open("dd/dd/ff", O_CREATE | O_RDWR);
   if(fd < 0){
     printf(1, "create dd/dd/ff failed\n");
@@ -872,7 +877,7 @@ subdir(void)
   }
   write(fd, "FF", 2);
   close(fd);
-
+  
   fd = open("dd/dd/../ff", 0);
   if(fd < 0){
     printf(1, "open dd/dd/../ff failed\n");
@@ -884,7 +889,7 @@ subdir(void)
     exit();
   }
   close(fd);
-
+  
   if(link("dd/dd/ff", "dd/dd/ffff") != 0){
     printf(1, "link dd/dd/ff dd/dd/ffff failed\n");
     exit();
@@ -898,7 +903,7 @@ subdir(void)
     printf(1, "open (unlinked) dd/dd/ff succeeded\n");
     exit();
   }
-
+  
   if(chdir("dd") != 0){
     printf(1, "chdir dd failed\n");
     exit();
@@ -915,7 +920,7 @@ subdir(void)
     printf(1, "chdir ./.. failed\n");
     exit();
   }
-
+  
   fd = open("dd/dd/ffff", 0);
   if(fd < 0){
     printf(1, "open dd/dd/ffff failed\n");
@@ -931,7 +936,6 @@ subdir(void)
     printf(1, "open (unlinked) dd/dd/ff succeeded!\n");
     exit();
   }
-
   if(open("dd/ff/ff", O_CREATE|O_RDWR) >= 0){
     printf(1, "create dd/ff/ff succeeded!\n");
     exit();
@@ -992,7 +996,6 @@ subdir(void)
     printf(1, "chdir dd/xx succeeded!\n");
     exit();
   }
-
   if(unlink("dd/dd/ffff") != 0){
     printf(1, "unlink dd/dd/ff failed\n");
     exit();
@@ -1617,37 +1620,37 @@ main(int argc, char *argv[])
   }
   close(open("usertests.ran", O_CREATE));
 
-  bigargtest();
-  bigwrite();
-  bigargtest();
-  bsstest();
-  sbrktest();
-  validatetest();
+//  bigargtest();
+//  bigwrite();
+//  bigargtest();
+//  bsstest();
+//  sbrktest();
+//  validatetest();
 
-  opentest();
-  writetest();
-  writetest1();
-  createtest();
+//  opentest();
+//  writetest();
+//  writetest1();
+  // createtest();
 
-  mem();
-  pipe1();
-  preempt();
-  exitwait();
+  // mem();
+  // pipe1();
+  // preempt();
+  // exitwait();
 
-  rmdot();
-  fourteen();
-  bigfile();
-  subdir();
-  concreate();
-  linkunlink();
-  linktest();
-  unlinkread();
-  createdelete();
-  twofiles();
-  sharedfd();
-  dirfile();
-  iref();
-  forktest();
+  // rmdot();
+  // fourteen();
+  // bigfile();
+  // subdir();
+  // concreate();
+  // linkunlink();
+  // linktest();
+  // unlinkread();
+  // createdelete();
+  // twofiles();
+  // sharedfd();
+  // dirfile();
+  // iref();
+  // forktest();
   bigdir(); // slow
 
   exectest();

@@ -45,7 +45,7 @@ static int
 get_device(char *path, char **subpath, struct inode **node_store) {
     int i, slash = -1, colon = -1;
     for (i = 0; path[i] != '\0'; i ++) {
-        if (path[i] == ':') { colon = i; break; }
+//        if (path[i] == ':') { colon = i; break; }
         if (path[i] == '/') { slash = i; break; }
     }
     if (colon < 0 && slash != 0) {

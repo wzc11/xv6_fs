@@ -68,7 +68,6 @@ sys_dup(void)
 int
 sys_read(void)
 {
-//  cprintf("  enter sys_read  ");
   struct file *f;
   int n;
   char *p;
@@ -172,7 +171,7 @@ sys_unlink(void)
     return -1;
   if((dp = vfs_lookup_parent(path, name)) == 0)
     return -1;
-
+  
   begin_trans();
 
   if(vop_unlink(dp, name) != 0)
@@ -194,7 +193,6 @@ create(char *path, short type, short major, short minor)
   struct inode *ip, *dp;
   char name[DIRSIZ];
   
-//  cprintf("enter create, type=%d\n", type);
   if((dp = vfs_lookup_parent(path, name)) == 0)
     return 0;
   vop_ilock(dp);
@@ -212,7 +210,8 @@ create(char *path, short type, short major, short minor)
 
   if((ip = vop_create_inode(dp, type, major, minor)) == 0)
     panic("create: ialloc");
-
+//  struct sfs_inode *sin = vop_info(ip, sfs_inode);
+//  cprintf("sin->inum = %d, sin->ref = %d\n", sin->inum, sin->ref);
 //  cprintf("successful create ip\n");
 
   if(type == T_DIR){  // Create . and .. entries.
@@ -238,15 +237,18 @@ sys_open(void)
   int fd, omode;
   struct file *f;
   struct inode *ip;
-
+//  cprintf("enter sys_open\n");
   if(argstr(0, &path) < 0 || argint(1, &omode) < 0)
     return -1;
   if(omode & O_CREATE){
     begin_trans();
     ip = create(path, T_FILE, 0, 0);
     commit_trans();
-    if(ip == 0)
+//    cprintf("result = %d\n", ip);
+    if(ip == 0){
+//      cprintf("hello world\n");
       return -1;
+    }
   } else {
     if((ip = vfs_lookup(path)) == 0)
       return -1;
@@ -256,7 +258,7 @@ sys_open(void)
       return -1;
     }
   }
-
+  
   if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
     if(f)
       fileclose(f);
@@ -264,12 +266,13 @@ sys_open(void)
     return -1;
   }
   vop_iunlock(ip);
-
+//  cprintf("after filealloc\n");
   f->type = FD_INODE;
   f->ip = ip;
   f->off = 0;
   f->readable = !(omode & O_WRONLY);
   f->writable = (omode & O_WRONLY) || (omode & O_RDWR);
+  
   return fd;
 }
 
@@ -292,7 +295,6 @@ sys_mkdir(void)
 int
 sys_mknod(void)
 {
-//  cprintf("enter sys_mknod\n");
   struct inode *ip;
   char *path;
   int len;

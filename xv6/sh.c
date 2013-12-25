@@ -63,6 +63,7 @@ runcmd(struct cmd *cmd)
   struct listcmd *lcmd;
   struct pipecmd *pcmd;
   struct redircmd *rcmd;
+  char cmdstr[10];
 //  printf(2, "enter runcmd, type=%d\n", cmd->type);
 
   if(cmd == 0)
@@ -73,10 +74,19 @@ runcmd(struct cmd *cmd)
     panic("runcmd");
 
   case EXEC:
+//    printf(2, "enter exec\n");
     ecmd = (struct execcmd*)cmd;
+    memset(cmdstr, 0, 10);
     if(ecmd->argv[0] == 0)
       exit();
-    exec(ecmd->argv[0], ecmd->argv);
+    else if(cmdstr[0] != '/'){
+      strcpy(&(cmdstr[1]), ecmd->argv[0]);
+      cmdstr[0] = '/';
+    }
+    else{
+      strcpy(cmdstr, ecmd->argv[0]);
+    }
+    exec(cmdstr, ecmd->argv);
     printf(2, "exec %s failed\n", ecmd->argv[0]);
     break;
 

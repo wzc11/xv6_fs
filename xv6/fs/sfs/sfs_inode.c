@@ -245,6 +245,7 @@ sfs_iget(uint dev, uint inum, short type)
   empty = 0;
   for(ip = &icache.inode[0]; ip < &icache.inode[NINODE]; ip++){
     sip = vop_info(ip, sfs_inode);
+
     if(ip->fstype == SFS_INODE && sip->ref > 0 && sip->dev == dev && sip->inum == inum){
       sip->ref++;
       release(&icache.lock);
@@ -256,9 +257,10 @@ sfs_iget(uint dev, uint inum, short type)
   // Recycle an inode cache entry.
   if(empty == 0)
     panic("iget: no inodes");
-
+//  cprintf("inum1 = %d\n", inum);
   ip = empty;
   sip = vop_info(ip, sfs_inode);
+//  cprintf("inum2 = %d\n", inum);
   sip->dev = dev;
   sip->inum = inum;
   sip->ref = 1;
@@ -272,7 +274,9 @@ sfs_iget(uint dev, uint inum, short type)
     sip->type = dip->type;
     brelse(bp);
   }
+//  cprintf("inum3 = %d\n", inum);
   vop_init(ip, sfs_get_ops(sip->type), SFS_INODE);
+//  cprintf("inum4 = %d\n", inum);
   return ip;
 }
 
@@ -360,7 +364,9 @@ sfs_iput(struct inode *ip)
     sin->flags = 0;
     wakeup(sin);
   }
+//  cprintf("sin->inum = %d, sin->ref = %d\n", sin->inum, sin->ref);
   sin->ref--;
+//  cprintf("sin->inum = %d, sin->ref = %d\n", sin->inum, sin->ref);
   release(&icache.lock);
 }
 
@@ -543,8 +549,10 @@ sfs_dirlookup(struct inode *dp, char *name, uint *poff)
 
 //  cprintf("dpname = %s", name);
   for(off = 0; off < sdp->size; off += sizeof(de)){
+ //   cprintf("after dirlookup, off= %d, sdpsize=%d\n", off, sdp->size);
     if(sfs_readi(dp, (char*)&de, off, sizeof(de)) != sizeof(de))
       panic("dirlink read");
+
     if(de.inum == 0)
       continue;
 
@@ -556,10 +564,11 @@ sfs_dirlookup(struct inode *dp, char *name, uint *poff)
       if(poff)
         *poff = off;
       inum = de.inum;
+//      cprintf("de=%s, deinum=%d,dename=%s\n", (char*)&de, de.inum, de.name);
       return sfs_iget(sdp->dev, inum, 0);
-    }
+    }    
   }
-
+//  cprintf("return 0\n");
   return 0;
 }
 
@@ -685,10 +694,9 @@ namex(struct inode *ip, char *path, int nameiparent, char *name)
   struct inode *next;
   struct sfs_inode *sinp;
 
-  sinp = vop_info(ip, sfs_inode);
-
   while((path = skipelem(path, name)) != 0){
     sfs_ilock(ip);
+    sinp = vop_info(ip, sfs_inode);
     if(sinp->type != T_DIR){
       sfs_iunlockput(ip);
       return 0;
@@ -699,9 +707,7 @@ namex(struct inode *ip, char *path, int nameiparent, char *name)
       return ip;
     }
     if((next = sfs_dirlookup(ip, name, 0)) == 0){
-   //   cprintf("     get the mkdir");
       sfs_iunlockput(ip);
-   //   cprintf("     iunlockput it");
       return 0;
     }
     sfs_iunlockput(ip);
@@ -784,7 +790,7 @@ sfs_create_inode(struct inode *dirnode, short type, short major, short minor){
 
 static int
 sfs_opendir(struct inode *node, int open_flags) {
-  if(open_flags & O_RDONLY){
+  if(open_flags != O_RDONLY){
     return -1;
   }
   return 0;
