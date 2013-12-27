@@ -51,6 +51,7 @@ struct inode_ops {
     short (*vop_gettype)(struct inode *node);
     uint (*vop_getdev)(struct inode *node);
     short (*vop_getnlink)(struct inode *node);
+    int (*vop_getpath)(struct inode *node, char *path, int maxlen);
 };
 
 #define __vop_op(node, sym)                                                                         \
@@ -82,7 +83,7 @@ struct inode_ops {
 #define vop_gettype(node)                               (__vop_op(node, gettype)(node))
 #define vop_getdev(node)                                (__vop_op(node, getdev)(node))
 #define vop_getnlink(node)                              (__vop_op(node, getnlink)(node))
-
+#define vop_getpath(node, path, maxlen)                 (__vop_op(node, getpath)(node, path, maxlen))
 
 #define vop_init(node, ops, fstype)            inode_init(node, ops, fstype)
 

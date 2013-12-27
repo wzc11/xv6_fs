@@ -22,6 +22,8 @@ int getpid(void);
 char* sbrk(int);
 int sleep(int);
 int uptime(void);
+int halt(void);
+int getcwd(char*, int);
 
 // ulib.c
 int stat(char*, struct stat*);

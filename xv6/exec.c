@@ -59,7 +59,6 @@ exec(char *path, char **argv)
     goto bad;
   clearpteu(pgdir, (char*)(sz - 2*PGSIZE));
   sp = sz;
-//  cprintf("enter lookup3\n");
   // Push argument strings, prepare rest of stack in ustack.
   for(argc = 0; argv[argc]; argc++) {
     if(argc >= MAXARG)
@@ -77,13 +76,13 @@ exec(char *path, char **argv)
   sp -= (3+argc+1) * 4;
   if(copyout(pgdir, sp, ustack, (3+argc+1)*4) < 0)
     goto bad;
-
+  
   // Save program name for debugging.
   for(last=s=path; *s; s++)
     if(*s == '/')
       last = s+1;
   safestrcpy(proc->name, last, sizeof(proc->name));
-//  cprintf("enter lookup4\n");
+
   // Commit to the user image.
   oldpgdir = proc->pgdir;
   proc->pgdir = pgdir;

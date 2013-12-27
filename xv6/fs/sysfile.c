@@ -381,3 +381,17 @@ sys_pipe(void)
   fd[1] = fd1;
   return 0;
 }
+
+int
+sys_getcwd(void)
+{
+  char* buf;
+  int len;
+  if(argstr(0, &buf) < 0 || argint(1, &len) < 0){
+    return -1;
+  }
+  if(len == 0){
+    return -1;
+  }
+  return vfs_getcwd(buf, len);
+}
