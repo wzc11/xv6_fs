@@ -20,5 +20,6 @@
 #define SYS_link   19
 #define SYS_mkdir  20
 #define SYS_close  21
-#define SYS_halt   22
-#define SYS_getcwd 23
+#define SYS_fchange 22
+#define SYS_halt   23
+#define SYS_getcwd 24

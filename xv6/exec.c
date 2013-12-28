@@ -33,7 +33,6 @@ exec(char *path, char **argv)
     goto bad;
   if(elf.magic != ELF_MAGIC)
     goto bad;
-
   if((pgdir = setupkvm()) == 0)
     goto bad;
   // Load program into memory.
@@ -68,6 +67,7 @@ exec(char *path, char **argv)
       goto bad;
     ustack[3+argc] = sp;
   }
+  
   ustack[3+argc] = 0;
   ustack[0] = 0xffffffff;  // fake return PC
   ustack[1] = argc;
@@ -76,13 +76,12 @@ exec(char *path, char **argv)
   sp -= (3+argc+1) * 4;
   if(copyout(pgdir, sp, ustack, (3+argc+1)*4) < 0)
     goto bad;
-  
+
   // Save program name for debugging.
   for(last=s=path; *s; s++)
     if(*s == '/')
       last = s+1;
   safestrcpy(proc->name, last, sizeof(proc->name));
-
   // Commit to the user image.
   oldpgdir = proc->pgdir;
   proc->pgdir = pgdir;
@@ -92,11 +91,12 @@ exec(char *path, char **argv)
   switchuvm(proc);
   freevm(oldpgdir);
   return 0;
-
+cprintf("enter lookup7\n");
  bad:
   if(pgdir)
     freevm(pgdir);
   if(ip)
     vop_iunlockput(ip);
+  cprintf("enter bad\n");
   return -1;
 }

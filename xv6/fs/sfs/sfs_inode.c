@@ -557,6 +557,7 @@ sfs_dirlookup(struct inode *dp, char *name, uint *poff)
       if(poff)
         *poff = off;
       inum = de.inum;
+  //    cprintf("inum = %d\n", inum);
       return sfs_iget(sdp->dev, inum, 0);
     }    
   }
@@ -871,6 +872,18 @@ sfs_getnlink(struct inode *node){
   return snode->nlink;
 }
 
+static short
+sfs_getmajor(struct inode *node){
+  struct sfs_inode *snode = vop_info(node, sfs_inode);
+  return snode->major;
+}
+
+static short
+sfs_getminor(struct inode *node){
+  struct sfs_inode *snode = vop_info(node, sfs_inode);
+  return snode->minor;
+}
+
 // The sfs specific DIR operations correspond to the abstract operations on a inode.
 static const struct inode_ops sfs_node_dirops = {
     .vop_magic                      = VOP_MAGIC,
@@ -917,4 +930,6 @@ static const struct inode_ops sfs_node_fileops = {
     .vop_gettype                    = sfs_gettype,
     .vop_getdev                     = sfs_getdev,
     .vop_getnlink                   = sfs_getnlink,
+    .vop_getmajor                   = sfs_getmajor,
+    .vop_getminor                   = sfs_getminor,
 };

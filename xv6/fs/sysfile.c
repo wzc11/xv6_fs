@@ -206,13 +206,8 @@ create(char *path, short type, short major, short minor)
     return 0;
   }
 
-//  cprintf("before create inode, dpinum=%d\n", vop_gettype(dp));
-
   if((ip = vop_create_inode(dp, type, major, minor)) == 0)
     panic("create: ialloc");
-//  struct sfs_inode *sin = vop_info(ip, sfs_inode);
-//  cprintf("sin->inum = %d, sin->ref = %d\n", sin->inum, sin->ref);
-//  cprintf("successful create ip\n");
 
   if(type == T_DIR){  // Create . and .. entries.
     vop_link_inc(dp);  // for ".."
@@ -394,4 +389,54 @@ sys_getcwd(void)
     return -1;
   }
   return vfs_getcwd(buf, len);
+}
+
+int
+sys_fchange(void)
+{
+  int callnum;
+  argint(2,&callnum);
+  begin_trans();
+  if(callnum == 3)
+  {
+    char *srcpath, *destpath, destparentname[260];
+    struct inode *srcnode, *destptnode, *destnode;
+    if(argstr(0, &srcpath) < 0 || argstr(1, &destpath) < 0)
+    {
+      cprintf("cp: path error!\n");
+      commit_trans();
+      return -1;
+    }
+    if((srcnode = vfs_lookup(srcpath)) == 0)
+    {
+      cprintf("cp: source file does not exits!\n");
+      commit_trans();
+      return -1;
+    }
+    if((destptnode = vfs_lookup_parent(destpath, destparentname)) == 0)
+    {
+      cprintf("cp: destination's parlsent path error!\n");
+      commit_trans();
+      return -1;
+    }
+    if((destnode = create(destpath, 2, vop_getmajor(srcnode), vop_getminor(srcnode))) == 0)
+    {
+      cprintf("cp: can not create destination's inode!\n");
+      commit_trans();
+      return -1;
+    }
+    vop_iunlockput(destnode);
+    vop_ilock(srcnode);
+    int offset = 0, count;
+    char buf[512];  
+    while((count = vop_read(srcnode, buf, offset, 512)) > 0)
+    {
+      vop_write(destnode, buf, offset, count);
+      offset += 512;
+    }
+    vop_iunlock(srcnode);
+    vop_ref_dec(srcnode);
+  }
+  commit_trans();
+  return 0;
 }

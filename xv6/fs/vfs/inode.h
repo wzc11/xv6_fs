@@ -52,6 +52,8 @@ struct inode_ops {
     uint (*vop_getdev)(struct inode *node);
     short (*vop_getnlink)(struct inode *node);
     int (*vop_getpath)(struct inode *node, char *path, int maxlen);
+    short (*vop_getmajor)(struct inode *node);
+    short (*vop_getminor)(struct inode *node);
 };
 
 #define __vop_op(node, sym)                                                                         \
@@ -63,6 +65,8 @@ struct inode_ops {
 #define vop_read(ip, dst, off, n)                       (__vop_op(ip, read)(ip, dst, off, n))
 #define vop_write(ip, src, off, n)                      (__vop_op(ip, write)(ip, src, off, n))
 #define vop_fstat(ip, st)                               (__vop_op(ip, fstat)(ip, st))
+#define vop_getmajor(node)                              (__vop_op(node, getmajor)(node))
+#define vop_getminor(node)                              (__vop_op(node, getminor)(node))
 #define vop_ref_inc(ip)                                 (__vop_op(ip, ref_inc)(ip))
 #define vop_ref_dec(ip)                                 (__vop_op(ip, ref_dec)(ip))
 #define vop_namei(node, path)                           (__vop_op(node, namei)(node, path))

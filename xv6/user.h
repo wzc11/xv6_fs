@@ -14,6 +14,7 @@ int open(char*, int);
 int mknod(char*, short, short);
 int unlink(char*);
 int fstat(int fd, struct stat*);
+int fchange(char*,char*,int);
 int link(char*, char*);
 int mkdir(char*);
 int chdir(char*);
