@@ -19,21 +19,21 @@ exec(char *path, char **argv)
   struct inode *ip;
   struct proghdr ph;
   pde_t *pgdir, *oldpgdir;
-//  cprintf("enter lookup1\n");
+  cprintf("enter lookup1\n");
   if((ip = vfs_lookup(path)) == 0)
   {
     return -1;
   }
-//  cprintf("enter lookup2\n");
+//  cprintf("enter lookup2, iptype = %d\n",ip->fstype);
   vop_ilock(ip);
   pgdir = 0;
-  
+//  cprintf("enter lookup2.5\n");
   // Check ELF header
   if(vop_read(ip, (char*)&elf, 0, sizeof(elf)) < sizeof(elf))
     goto bad;
   if(elf.magic != ELF_MAGIC)
     goto bad;
-
+//  cprintf("enter lookup3\n");
   if((pgdir = setupkvm()) == 0)
     goto bad;
   // Load program into memory.
@@ -50,6 +50,7 @@ exec(char *path, char **argv)
     if(loaduvm(pgdir, (char*)ph.vaddr, ip, ph.off, ph.filesz) < 0)
       goto bad;
   }
+//  cprintf("enter lookup4\n");
   vop_iunlockput(ip);
   ip = 0;
   // Allocate two pages at the next page boundary.
@@ -59,7 +60,7 @@ exec(char *path, char **argv)
     goto bad;
   clearpteu(pgdir, (char*)(sz - 2*PGSIZE));
   sp = sz;
-//  cprintf("enter lookup3\n");
+//  cprintf("enter lookup5\n");
   // Push argument strings, prepare rest of stack in ustack.
   for(argc = 0; argv[argc]; argc++) {
     if(argc >= MAXARG)
@@ -73,7 +74,6 @@ exec(char *path, char **argv)
   ustack[0] = 0xffffffff;  // fake return PC
   ustack[1] = argc;
   ustack[2] = sp - (argc+1)*4;  // argv pointer
-
   sp -= (3+argc+1) * 4;
   if(copyout(pgdir, sp, ustack, (3+argc+1)*4) < 0)
     goto bad;
@@ -92,6 +92,7 @@ exec(char *path, char **argv)
   proc->tf->esp = sp;
   switchuvm(proc);
   freevm(oldpgdir);
+  cprintf("enter lookup5\n");
   return 0;
 
  bad:

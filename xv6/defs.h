@@ -37,6 +37,9 @@ int             filewrite(struct file*, char*, int n);
 void            sfs_iinit(void);
 void            readsb(int dev, struct sfs_super *sb);
 
+// fat_inode.c
+void            fat_iinit(void);
+
 // ide.c
 void            ideinit(void);
 void            ideintr(void);

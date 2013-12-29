@@ -100,7 +100,7 @@ userinit(void)
 
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = vfs_lookup("/");
-
+  cprintf("userinit after lookup\n");
   p->state = RUNNABLE;
 }
 
@@ -279,7 +279,6 @@ scheduler(void)
       p->state = RUNNING;
       swtch(&cpu->scheduler, proc->context);
       switchkvm();
-    //  cprintf("hello\n");
       // Process is done running for now.
       // It should have changed its p->state before coming back.
       proc = 0;

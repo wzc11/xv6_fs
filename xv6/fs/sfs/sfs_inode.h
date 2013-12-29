@@ -1,6 +1,7 @@
 #ifndef __FS_SFS_SFS_INODE_H__
 #define __FS_SFS_SFS_INODE_H__
 
+
 // On-disk file system format. 
 // Both the kernel and user programs use this header file.
 
@@ -55,10 +56,10 @@ struct sfs_inode{
 #define IBLOCK(i)     ((i) / IPB + 2)
 
 // Bitmap bits per block
-#define BPB           (BSIZE*8)
+#define SFSBPB           (BSIZE*8)
 
 // Block containing bit for block b
-#define BBLOCK(b, ninodes) (b/BPB + (ninodes)/IPB + 3)
+#define BBLOCK(b, ninodes) (b/SFSBPB + (ninodes)/IPB + 3)
 
 // Directory is a file containing a sequence of dirent structures.
 #define DIRSIZ 14
@@ -69,5 +70,6 @@ struct sfs_dirent {
 };
 
 struct inode* sfs_iget(uint dev, uint inum, short type);
+
 
 #endif

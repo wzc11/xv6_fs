@@ -99,7 +99,6 @@ bread(uint dev, uint sector)
   b = bget(dev, sector);
   if(!(b->flags & B_VALID))
     iderw(b);
-//  cprintf("after iderw");
   return b;
 }
 

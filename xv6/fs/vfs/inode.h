@@ -2,16 +2,26 @@
 #define __FS_VFS_INODE_H__
 
 #include "sfs_inode.h"
+#include "fat_inode.h"//added 12.25
+
+#include "spinlock.h"
 
 struct inode {
     union {
         struct sfs_inode __sfs_inode_info;
+        struct fat_inode __fat_inode_info;
     } in_info;
     int fstype;
     const struct inode_ops *in_ops;
 };
 
+struct icache_universal {
+  struct spinlock lock;
+  struct inode inode[NINODE];
+};
+
 #define SFS_INODE                         1
+#define FAT_INODE                         2
 
 #define __vop_info(node, type)                                      \
     ({                                                              \

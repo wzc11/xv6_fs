@@ -2,7 +2,7 @@
 #include "stat.h"
 #include "user.h"
 #include "fs.h"
-#include "sfs_inode.h"
+#include "sfs_inode.h"//
 
 char*
 fmtname(char *path)

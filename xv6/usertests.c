@@ -7,7 +7,7 @@
 #include "syscall.h"
 #include "traps.h"
 #include "memlayout.h"
-#include "sfs_inode.h"
+#include "sfs_inode.h"//
 
 char buf[8192];
 char name[3];
