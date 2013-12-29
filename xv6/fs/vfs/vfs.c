@@ -9,7 +9,8 @@
 #include "inode.h"
 #include "vfs.h"
 
-int vfs_get_curdir(struct inode **dir_store){
+int 
+vfs_get_curdir(struct inode **dir_store){
 //    cprintf("enter vfs_get_curdir\n");
     struct inode *node;
     node = proc -> cwd;
@@ -115,4 +116,18 @@ vfs_lookup_parent(char *path, char *name){
     }
     cprintf("vfs_lookup_parent fstype = %d\n", node->fstype);
     return vop_nameiparent(node, path, name);
+}
+
+/*
+ * vfs_getcwd - retrieve current working directory(cwd).
+ */
+int
+vfs_getcwd(char *path, int len) {
+    int ret;
+    struct inode *node;
+    if ((ret = vfs_get_curdir(&node)) != 0) {
+        return ret;
+    }
+    ret = vop_getpath(node, path, len);
+    return ret;
 }

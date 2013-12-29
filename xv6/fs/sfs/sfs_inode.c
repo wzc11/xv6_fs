@@ -541,37 +541,90 @@ sfs_writei(struct inode *ip, char *src, uint off, uint n)
 struct inode*
 sfs_dirlookup(struct inode *dp, char *name, uint *poff)
 {
-//  cprintf("enter sfs_dirlookup, name=%s\n", name);
   uint off, inum;
   struct sfs_dirent de;
   struct sfs_inode *sdp = vop_info(dp, sfs_inode);
-//  cprintf("inum = %d\n", sdp->inum);
   if(sdp->type != T_DIR)
     panic("dirlookup not DIR");
 
-//  cprintf("dpname = %s", name);
   for(off = 0; off < sdp->size; off += sizeof(de)){
- //   cprintf("after dirlookup, off= %d, sdpsize=%d\n", off, sdp->size);
     if(sfs_readi(dp, (char*)&de, off, sizeof(de)) != sizeof(de))
       panic("dirlink read");
 
     if(de.inum == 0)
       continue;
 
- //   if(namecmp(name, "mkdir") == 0)
-//    cprintf("dename = %s\n", de.name);
     if(namecmp(name, de.name) == 0){
-//      cprintf("   name match");
       // entry matches path element
       if(poff)
         *poff = off;
       inum = de.inum;
-//      cprintf("de=%s, deinum=%d,dename=%s\n", (char*)&de, de.inum, de.name);
+  //    cprintf("inum = %d\n", inum);
       return sfs_iget(sdp->dev, inum, 0);
     }    
   }
-//  cprintf("return 0\n");
   return 0;
+}
+
+static int
+sfs_inumtoname(struct inode *dp, int inum, char* name){
+  uint off;
+  struct sfs_dirent de;
+  struct sfs_inode *sdp = vop_info(dp, sfs_inode);
+  for(off = 0; off < sdp->size; off += sizeof(de)){
+    if(sfs_readi(dp, (char*)&de, off, sizeof(de)) != sizeof(de))
+      return -1;
+    if(inum == de.inum){
+      safestrcpy(name, de.name, DIRSIZ);
+      return 0;
+    }    
+  }
+  return -1;
+}
+
+int
+sfs_getpath(struct inode *node, char *path, int maxlen){
+  int ret, namelen;
+  int pos = maxlen - 2;
+  uint inum;
+  char *ptr = path + maxlen;
+  char namebuf[DIRSIZ];
+  struct sfs_inode *sin = vop_info(node, sfs_inode);
+  vop_ref_inc(node);
+  while(1){
+    struct inode *parent;
+    if((parent = sfs_dirlookup(node, "..", 0)) == 0){
+      goto failed;
+    }
+    inum = sin->inum;
+    vop_ref_dec(node);
+    if(node == parent){
+      vop_ref_dec(node);
+      break;
+    }
+    node = parent;
+    sin = vop_info(node, sfs_inode);
+    ret = sfs_inumtoname(node, inum, namebuf);
+    if(ret != 0){
+      goto failed;
+    }
+    if((namelen = strlen(namebuf) + 1) > pos){
+      return -1;
+    }
+    pos -= namelen;
+    ptr -= namelen;
+    memcpy(ptr, namebuf, namelen -1);
+    ptr[namelen -1] = '/';
+  }
+  namelen = maxlen - pos - 2;
+  ptr = memmove(path + 1, ptr, namelen);
+  ptr[-1] = '/';
+  ptr[namelen] = '\0';
+  
+  return 0;
+failed:
+  vop_ref_dec(node);
+  return -1;
 }
 
 // Write a new directory entry (name, inum) into the directory dp.
@@ -821,6 +874,18 @@ sfs_getnlink(struct inode *node){
   return snode->nlink;
 }
 
+static short
+sfs_getmajor(struct inode *node){
+  struct sfs_inode *snode = vop_info(node, sfs_inode);
+  return snode->major;
+}
+
+static short
+sfs_getminor(struct inode *node){
+  struct sfs_inode *snode = vop_info(node, sfs_inode);
+  return snode->minor;
+}
+
 // The sfs specific DIR operations correspond to the abstract operations on a inode.
 static const struct inode_ops sfs_node_dirops = {
     .vop_magic                      = VOP_MAGIC,
@@ -847,6 +912,7 @@ static const struct inode_ops sfs_node_dirops = {
     .vop_gettype                    = sfs_gettype,
     .vop_getdev                     = sfs_getdev,
     .vop_getnlink                   = sfs_getnlink,
+    .vop_getpath                    = sfs_getpath,
 }; 
 // The sfs specific FILE operations correspond to the abstract operations on a inode.
 static const struct inode_ops sfs_node_fileops = {
@@ -866,4 +932,6 @@ static const struct inode_ops sfs_node_fileops = {
     .vop_gettype                    = sfs_gettype,
     .vop_getdev                     = sfs_getdev,
     .vop_getnlink                   = sfs_getnlink,
+    .vop_getmajor                   = sfs_getmajor,
+    .vop_getminor                   = sfs_getminor,
 };

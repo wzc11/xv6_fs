@@ -119,6 +119,7 @@ void            pushcli(void);
 void            popcli(void);
 
 // string.c
+void*           memcpy(void*, const void*, uint);
 int             memcmp(const void*, const void*, uint);
 void*           memmove(void*, const void*, uint);
 void*           memset(void*, int, uint);

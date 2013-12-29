@@ -88,3 +88,12 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+int
+sys_halt(void)
+{
+  char *p = "Shutdown";
+  for( ; *p; p++)
+    outb(0x8900, *p);
+  return 0;
+}
