@@ -84,7 +84,9 @@ extern int sys_exec(void);
 extern int sys_exit(void);
 extern int sys_fork(void);
 extern int sys_fstat(void);
-extern int sys_fchange(void);
+extern int sys_copy(void);
+extern int sys_move(void);
+extern int sys_remove(void);
 extern int sys_getpid(void);
 extern int sys_kill(void);
 extern int sys_link(void);
@@ -101,6 +103,9 @@ extern int sys_write(void);
 extern int sys_uptime(void);
 extern int sys_halt(void);
 extern int sys_getcwd(void);
+extern int sys_rmdir(void);
+extern int sys_touch(void);
+extern int sys_find(void);
 
 static int (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -111,7 +116,9 @@ static int (*syscalls[])(void) = {
 [SYS_kill]    sys_kill,
 [SYS_exec]    sys_exec,
 [SYS_fstat]   sys_fstat,
-[SYS_fchange] sys_fchange,
+[SYS_copy]    sys_copy,
+[SYS_move]    sys_move,
+[SYS_remove]  sys_remove,
 [SYS_chdir]   sys_chdir,
 [SYS_dup]     sys_dup,
 [SYS_getpid]  sys_getpid,
@@ -127,6 +134,9 @@ static int (*syscalls[])(void) = {
 [SYS_close]   sys_close,
 [SYS_halt]    sys_halt,
 [SYS_getcwd]  sys_getcwd,
+[SYS_rmdir]   sys_rmdir,
+[SYS_touch]   sys_touch,
+[SYS_find]    sys_find,
 };
 
 void

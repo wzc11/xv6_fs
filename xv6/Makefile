@@ -179,6 +179,7 @@ UPROGS=\
 	_ln\
 	_ls\
 	_mkdir\
+	_mv\
 	_rm\
 	_sh\
 	_stressfs\
@@ -187,6 +188,13 @@ UPROGS=\
 	_zombie\
 	_halt\
 	_pwd\
+	_rmdir\
+	_touch\
+	_find\
+	_head\
+	_tail\
+	_more\
+	_vi\
 
 fs.img: mkfs README $(UPROGS)
 	./mkfs fs.img README $(UPROGS)
@@ -280,8 +288,9 @@ qemu-nox-gdb: fs.img fat.img xv6.img .gdbinit
 
 EXTRA=\
 	mkfs.c ulib.c user.h cat.c cp.c echo.c forktest.c grep.c kill.c\
-	ln.c ls.c mkdir.c rm.c stressfs.c usertests.c wc.c zombie.c halt.c pwd.c\
+	ln.c ls.c mkdir.c mv.c rm.c stressfs.c usertests.c wc.c zombie.c halt.c pwd.c\
 	printf.c umalloc.c\
+	touch.c find.c head.c tail.c more.c vi.c\
 	README dot-bochsrc *.pl toc.* runoff runoff1 runoff.list\
 	.gdbinit.tmpl gdbutil\
 
