@@ -15,13 +15,12 @@
 
 #define min(a, b) ((a) < (b) ? (a) : (b))
 static void sfs_itrunc(struct inode*);
+static void sfs_ilock(struct inode *ip);
+static void sfs_iunlock(struct inode *ip);
 static const struct inode_ops sfs_node_dirops;
 static const struct inode_ops sfs_node_fileops;
 
-struct {
-  struct spinlock lock;
-  struct inode inode[NINODE];
-} icache;
+struct icache_universal icache;//added 12.27
 
 /*
  * sfs_get_ops - return function addr of fs_node_dirops/sfs_node_fileops
@@ -74,9 +73,9 @@ balloc(uint dev)
 
   bp = 0;
   readsb(dev, &sb);
-  for(b = 0; b < sb.size; b += BPB){
+  for(b = 0; b < sb.size; b += SFSBPB){
     bp = bread(dev, BBLOCK(b, sb.ninodes));
-    for(bi = 0; bi < BPB && b + bi < sb.size; bi++){
+    for(bi = 0; bi < SFSBPB && b + bi < sb.size; bi++){
       m = 1 << (bi % 8);
       if((bp->data[bi/8] & m) == 0){  // Is block free?
         bp->data[bi/8] |= m;  // Mark block in use.
@@ -101,7 +100,7 @@ bfree(int dev, uint b)
 
   readsb(dev, &sb);
   bp = bread(dev, BBLOCK(b, sb.ninodes));
-  bi = b % BPB;
+  bi = b % SFSBPB;
   m = 1 << (bi % 8);
   if((bp->data[bi/8] & m) == 0)
     panic("freeing free block");
@@ -236,8 +235,8 @@ sfs_iget(uint dev, uint inum, short type)
 {
   struct inode *ip, *empty;
   struct sfs_inode *sip;
-  struct buf *bp;
-  struct sfs_dinode *dip;
+//  struct buf *bp;
+//  struct sfs_dinode *dip;
   
   acquire(&icache.lock);
 
@@ -245,7 +244,7 @@ sfs_iget(uint dev, uint inum, short type)
   empty = 0;
   for(ip = &icache.inode[0]; ip < &icache.inode[NINODE]; ip++){
     sip = vop_info(ip, sfs_inode);
-
+ //   cprintf("IGET: fstype = %d, ref = %d, dev = %d, inum = %d\n", ip->fstype, sip->ref, sip->dev, sip->inum);
     if(ip->fstype == SFS_INODE && sip->ref > 0 && sip->dev == dev && sip->inum == inum){
       sip->ref++;
       release(&icache.lock);
@@ -269,11 +268,14 @@ sfs_iget(uint dev, uint inum, short type)
   if(type != 0){
     sip->type = type;
   }else{
-    bp = bread(dev, IBLOCK(inum));
-    dip = (struct sfs_dinode*)bp->data + inum%IPB;
-    sip->type = dip->type;
-    brelse(bp);
+ //   bp = bread(dev, IBLOCK(inum));
+ //   dip = (struct sfs_dinode*)bp->data + inum%IPB;
+ //   sip->type = dip->type;
+ //   brelse(bp);
+    sfs_ilock(ip);
+    sfs_iunlock(ip);
   }
+//  cprintf("tip type = %d, major = %d, minor = %d, nlink = %d, inum = %d\n", sip -> type, sip->major,sip->minor,sip->nlink, sip->inum);
 //  cprintf("inum3 = %d\n", inum);
   vop_init(ip, sfs_get_ops(sip->type), SFS_INODE);
 //  cprintf("inum4 = %d\n", inum);
@@ -294,7 +296,7 @@ sfs_idup(struct inode *ip)
 
 // Lock the given inode.
 // Reads the inode from disk if necessary.
-void
+static void
 sfs_ilock(struct inode *ip)
 {
   struct sfs_inode *sin = vop_info(ip, sfs_inode);
@@ -306,7 +308,7 @@ sfs_ilock(struct inode *ip)
 
   acquire(&icache.lock);
   while(sin->flags & I_BUSY)
-    sleep(sin, &icache.lock);
+    sleep(ip, &icache.lock);
   sin->flags |= I_BUSY;
   release(&icache.lock);
   
@@ -328,7 +330,7 @@ sfs_ilock(struct inode *ip)
 }
 
 // Unlock the given inode.
-void
+static void
 sfs_iunlock(struct inode *ip)
 {
   struct sfs_inode *sin = vop_info(ip, sfs_inode);
@@ -337,7 +339,7 @@ sfs_iunlock(struct inode *ip)
 
   acquire(&icache.lock);
   sin->flags &= ~I_BUSY;
-  wakeup(sin);
+  wakeup(ip);
   release(&icache.lock);
 }
 
@@ -362,7 +364,7 @@ sfs_iput(struct inode *ip)
     sfs_iupdate(ip);
     acquire(&icache.lock);
     sin->flags = 0;
-    wakeup(sin);
+    wakeup(ip);
   }
 //  cprintf("sin->inum = %d, sin->ref = %d\n", sin->inum, sin->ref);
   sin->ref--;
@@ -464,6 +466,7 @@ sfs_stati(struct inode *ip, struct stat *st)
   st->type = sin->type;
   st->nlink = sin->nlink;
   st->size = sin->size;
+  st->fstype = ip->fstype;
 }
 
 //PAGEBREAK!
@@ -828,7 +831,7 @@ sfs_link_dec(struct inode *ip)
 }
 
 struct inode*
-sfs_create_inode(struct inode *dirnode, short type, short major, short minor){
+sfs_create_inode(struct inode *dirnode, short type, short major, short minor, char* name){
 //  cprintf("enter sfs_create_inode\n");
   struct sfs_inode *sdirnode = vop_info(dirnode, sfs_inode);
   struct inode *ip = sfs_ialloc(dirnode, sdirnode->dev, type);
@@ -838,6 +841,16 @@ sfs_create_inode(struct inode *dirnode, short type, short major, short minor){
   sip->minor = minor;
   sip->nlink = 1;
   vop_iupdate(ip);
+  if(type == T_DIR){  // Create . and .. entries.
+    vop_link_inc(dirnode);  // for ".."
+    vop_iupdate(dirnode);
+    // No ip->nlink++ for ".": avoid cyclic ref count.
+    if(vop_dirlink(ip, ".", ip) < 0 || vop_dirlink(ip, "..", dirnode) < 0)
+      panic("create dots");
+  }
+
+  if(vop_dirlink(dirnode, name, ip) < 0)
+    panic("create: dirlink");
   return ip;
 }
 

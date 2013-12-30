@@ -32,6 +32,7 @@ main(void)
   binit();         // buffer cache
   fileinit();      // file table
   sfs_iinit();     // inode cache
+  fat_iinit();
   ideinit();       // disk
   if(!ismp)
     timerinit();   // uniprocessor timer

@@ -28,13 +28,16 @@ OBJS = \
 	vectors.o\
 	vm.o\
 	fs/vfs/vfs.o\
-    fs/vfs/inode.o\
-    fs/sfs/sfs_fs.o\
-    fs/sfs/sfs_inode.o\
+	fs/vfs/inode.o\
+	fs/sfs/sfs_fs.o\
+	fs/sfs/sfs_inode.o\
+	fs/fat32/fat_fs.o\
+	fs/fat32/fat_inode.o\
 
 INCLUDE = ./\
           fs/\
           fs/sfs\
+          fs/fat32\
           fs/vfs\
 
 
@@ -90,7 +93,7 @@ ASFLAGS = -m32 -gdwarf-2 -Wa,-divide
 # FreeBSD ld wants ``elf_i386_fbsd''
 LDFLAGS += -m $(shell $(LD) -V | grep elf_i386 2>/dev/null)
 
-xv6.img: bootblock kernel fs.img
+xv6.img: bootblock kernel fs.img fat.img
 	dd if=/dev/zero of=xv6.img count=10000
 	dd if=bootblock of=xv6.img conv=notrunc
 	dd if=kernel of=xv6.img seek=1 conv=notrunc
@@ -132,8 +135,8 @@ kernel: $(OBJS) entry.o entryother initcode kernel.ld
 # great for testing the kernel on real hardware without
 # needing a scratch disk.
 MEMFSOBJS = $(filter-out ide.o,$(OBJS)) memide.o
-kernelmemfs: $(MEMFSOBJS) entry.o entryother initcode fs.img
-	$(LD) $(LDFLAGS) -Ttext 0x100000 -e main -o kernelmemfs entry.o  $(MEMFSOBJS) -b binary initcode entryother fs.img
+kernelmemfs: $(MEMFSOBJS) entry.o entryother initcode fs.img fat.img
+	$(LD) $(LDFLAGS) -Ttext 0x100000 -e main -o kernelmemfs entry.o  $(MEMFSOBJS) -b binary initcode entryother fs.img fat.img
 	$(OBJDUMP) -S kernelmemfs > kernelmemfs.asm
 	$(OBJDUMP) -t kernelmemfs | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > kernelmemfs.sym
 
@@ -196,19 +199,41 @@ UPROGS=\
 fs.img: mkfs README $(UPROGS)
 	./mkfs fs.img README $(UPROGS)
 
+#what is /dev/zero (an empty file)
+#131072 is 128MB, the size of fat32 system
+fat.img: README $(UPROGS)
+	dd if=/dev/zero of=fat.img count=131072
+	mkdosfs -F 32 -s 1 -n xv6 fat.img
+	-mkdir image
+	echo "wangxiaoyou11"|sudo -S mount -o loop fat.img image
+	sudo cp README image/
+	sudo cp _cat image/cat
+	sudo cp _echo image/echo
+	sudo cp _forktest image/forktest
+	sudo cp _grep image/grep
+	sudo cp _init image/init
+	sudo cp _ln image/ln
+	sudo cp _kill image/kill
+	sudo cp _ls image/ls
+	sudo cp _mkdir image/mkdir
+	sudo cp _rm image/rm
+	sudo cp _sh image/sh
+	sudo umount image
+
 -include *.d
 
 clean: 
 	rm -f *.tex *.dvi *.idx *.aux *.log *.ind *.ilg \
 	*.o *.d *.asm *.sym vectors.S bootblock entryother \
-	initcode initcode.out kernel xv6.img fs.img kernelmemfs mkfs \
+	initcode initcode.out kernel xv6.img fs.img fat.img kernelmemfs mkfs \
 	.gdbinit \
 	$(UPROGS)
 	rm -f fs/*.o fs/*.d
 	rm -f fs/vfs/*.o fs/vfs/*.d
 	rm -f fs/sfs/*.o fs/sfs/*.d
+	rm -f fs/fat32/*.o fs/fat32/*.d
 
-# make a printout
+# make a printout # this shouldn't be useful, right?
 FILES = $(shell grep -v '^\#' runoff.list)
 PRINT = runoff.list runoff.spec README toc.hdr toc.ftr $(FILES)
 
@@ -220,7 +245,7 @@ print: xv6.pdf
 
 # run in emulators
 
-bochs : fs.img xv6.img
+bochs : fs.img fat.img xv6.img
 	if [ ! -e .bochsrc ]; then ln -s dot-bochsrc .bochsrc; fi
 	bochs -q
 
@@ -233,25 +258,25 @@ QEMUGDB = $(shell if $(QEMU) -help | grep -q '^-gdb'; \
 ifndef CPUS
 CPUS := 2
 endif
-QEMUOPTS = -hdb fs.img xv6.img -smp $(CPUS) -m 512 $(QEMUEXTRA)
+QEMUOPTS = -hda xv6.img -hdb fs.img -hdc fat.img -smp $(CPUS) -m 512 $(QEMUEXTRA)
 
-qemu: fs.img xv6.img
+qemu: fs.img fat.img xv6.img
 	$(QEMU) -serial mon:stdio $(QEMUOPTS)
 
 qemu-memfs: xv6memfs.img
 	$(QEMU) xv6memfs.img -smp $(CPUS)
 
-qemu-nox: fs.img xv6.img
+qemu-nox: fs.img fat.img xv6.img
 	$(QEMU) -nographic $(QEMUOPTS)
 
 .gdbinit: .gdbinit.tmpl
 	sed "s/localhost:1234/localhost:$(GDBPORT)/" < $^ > $@
 
-qemu-gdb: fs.img xv6.img .gdbinit
+qemu-gdb: fs.img fat.img xv6.img .gdbinit
 	@echo "*** Now run 'gdb'." 1>&2
 	$(QEMU) -serial mon:stdio $(QEMUOPTS) -S $(QEMUGDB)
 
-qemu-nox-gdb: fs.img xv6.img .gdbinit
+qemu-nox-gdb: fs.img fat.img xv6.img .gdbinit
 	@echo "*** Now run 'gdb'." 1>&2
 	$(QEMU) -nographic $(QEMUOPTS) -S $(QEMUGDB)
 

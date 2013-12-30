@@ -2,16 +2,25 @@
 #define __FS_VFS_INODE_H__
 
 #include "sfs_inode.h"
+#include "fat_inode.h"//added 12.25
+
+#include "spinlock.h"
 
 struct inode {
     union {
         struct sfs_inode __sfs_inode_info;
+        struct fat_inode __fat_inode_info;
     } in_info;
     int fstype;
     const struct inode_ops *in_ops;
 };
 
-#define SFS_INODE                         1
+struct icache_universal {
+  struct spinlock lock;
+  struct inode inode[NINODE];
+};
+
+
 
 #define __vop_info(node, type)                                      \
     ({                                                              \
@@ -46,7 +55,7 @@ struct inode_ops {
     int (*vop_isdirempty)(struct inode *dp);
     struct inode* (*vop_link_inc)(struct inode *ip);
     struct inode* (*vop_link_dec)(struct inode *ip);
-    struct inode* (*vop_create_inode)(struct inode *dirnode, short type, short major, short minor);
+    struct inode* (*vop_create_inode)(struct inode *dirnode, short type, short major, short minor, char* name);
     int (*vop_open)(struct inode *node, int open_flags);
     short (*vop_gettype)(struct inode *node);
     uint (*vop_getdev)(struct inode *node);
@@ -82,7 +91,7 @@ struct inode_ops {
 #define vop_isdirempty(dp)                              (__vop_op(ip, isdirempty)(dp))
 #define vop_link_inc(ip)                                (__vop_op(ip, link_inc)(ip))
 #define vop_link_dec(ip)                                (__vop_op(ip, link_dec)(ip))
-#define vop_create_inode(dirnode, type, major, minor)   (__vop_op(dirnode, create_inode)(dirnode, type, major, minor))
+#define vop_create_inode(dirnode, type, major, minor, name)   (__vop_op(dirnode, create_inode)(dirnode, type, major, minor, name))
 #define vop_open(node, open_flags)                      (__vop_op(ip, open)(node, open_flags))
 #define vop_gettype(node)                               (__vop_op(node, gettype)(node))
 #define vop_getdev(node)                                (__vop_op(node, getdev)(node))

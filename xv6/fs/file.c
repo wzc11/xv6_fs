@@ -96,7 +96,7 @@ filestat(struct file *f, struct stat *st)
 int
 fileread(struct file *f, char *addr, int n)
 {
-//  cprintf("  enter fileread  type = %d", f->type);
+//  cprintf("  enter fileread  type = %d\n", f->type);
   int r;
 
   if(f->readable == 0)

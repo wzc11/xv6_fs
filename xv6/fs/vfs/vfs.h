@@ -1,4 +1,7 @@
+
 struct inode;
+
+
 
 int vfs_get_root(const char *devname, struct inode **node_store);
 int vfs_get_curdir(struct inode **dir_store);

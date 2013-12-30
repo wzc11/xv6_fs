@@ -11,7 +11,7 @@ int
 main(void)
 {
   int pid, wpid;
-
+  printf(1, "enter init.c..............\n");
   if(open("console", O_RDWR) < 0){
     mknod("console", 1, 1);
     open("console", O_RDWR);

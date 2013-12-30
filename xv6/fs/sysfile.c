@@ -16,6 +16,7 @@
 #include "inode.h"
 #include "vfs.h"
 
+
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
 static int
@@ -206,22 +207,13 @@ create(char *path, short type, short major, short minor)
     return 0;
   }
 
-  if((ip = vop_create_inode(dp, type, major, minor)) == 0)
+  if((ip = vop_create_inode(dp, type, major, minor, name)) == 0)
     panic("create: ialloc");
 
-  if(type == T_DIR){  // Create . and .. entries.
-    vop_link_inc(dp);  // for ".."
-    vop_iupdate(dp);
-    // No ip->nlink++ for ".": avoid cyclic ref count.
-    if(vop_dirlink(ip, ".", ip) < 0 || vop_dirlink(ip, "..", dp) < 0)
-      panic("create dots");
-  }
-
-  if(vop_dirlink(dp, name, ip) < 0)
-    panic("create: dirlink");
+  
+  
 
   vop_iunlockput(dp);
-
   return ip;
 }
 
@@ -243,8 +235,10 @@ sys_open(void)
       return -1;
     }
   } else {
+  //  cprintf("not create\n");
     if((ip = vfs_lookup(path)) == 0)
       return -1;
+ //   cprintf("success before open\n");
     vop_ilock(ip);
     if(vop_open(ip, omode) != 0){
       vop_iunlockput(ip);
@@ -393,10 +387,10 @@ int
 sys_copy(void)
 {
   /*$cp a.txt b.txt  
-  cpæ˜¯copyçš„ç®€å†™ï¼Œç”¨æ¥å¤åˆ¶æ–‡ä»¶ã€‚åœ¨å·¥ä½œç›®å½•ä¸‹ï¼Œå°†a.txtå¤åˆ¶åˆ°æ–‡ä»¶b.txt
+  cpÊÇcopyµÄ¼òÐ´£¬ÓÃÀ´¸´ÖÆÎÄ¼þ¡£ÔÚ¹¤×÷Ä¿Â¼ÏÂ£¬½«a.txt¸´ÖÆµ½ÎÄ¼þb.txt
 
   $cp a.txt ..
-  å°†a.txtå¤åˆ¶åˆ°çˆ¶ç›®å½•çš„a.txt  
+  ½«a.txt¸´ÖÆµ½¸¸Ä¿Â¼µÄa.txt  
   */
 
   begin_trans();
@@ -475,10 +469,10 @@ int
 sys_move(void)
 {
   /*$mv a.txt c.txt
-  mvæ˜¯moveçš„ç®€å†™ï¼Œç”¨æ¥ç§»åŠ¨æ–‡ä»¶ã€‚å°†a.txtç§»åŠ¨æˆä¸ºc.txt (ç›¸å½“äºŽé‡å‘½årename)
+  mvÊÇmoveµÄ¼òÐ´£¬ÓÃÀ´ÒÆ¶¯ÎÄ¼þ¡£½«a.txtÒÆ¶¯³ÉÎªc.txt (Ïàµ±ÓÚÖØÃüÃûrename)
 
   $mv c.txt /home/vamei
-  å°†c.txtç§»åŠ¨åˆ°/home/vameiç›®å½•
+  ½«c.txtÒÆ¶¯µ½/home/vameiÄ¿Â¼
   */
   begin_trans();
  
