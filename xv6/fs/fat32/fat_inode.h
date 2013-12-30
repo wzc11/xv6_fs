@@ -68,7 +68,7 @@ struct FSI {
     uint    TrailSig;
 }__attribute__ ((packed));
 
-//#define DIRSIZ 260
+#define FAT_DIRSIZ 260
 
 // DIR Descriptor
 struct DIR {
@@ -107,6 +107,6 @@ struct LDIR {
 #define DPS            (SECTSIZE / sizeof(struct DIR))
 
 struct inode*
-fat_iget(uint dev, uint inum, uint dircluster);
+fat_iget(uint dev, uint inum, short type, uint dircluster);
 
 #endif

@@ -210,10 +210,6 @@ fat.img: README $(UPROGS)
 	sudo cp _mkdir image/mkdir
 	sudo cp _rm image/rm
 	sudo cp _sh image/sh
-	sudo cp _stressfs image/stressfs
-	sudo cp _usertests image/usertests
-	sudo cp _wc image/wc
-	sudo cp _zombie image/zombie
 	sudo umount image
 
 -include *.d

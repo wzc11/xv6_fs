@@ -10,14 +10,13 @@
 
 struct inode *
 fat_get_root(){
-	cprintf("enter fat_get_root\n");
+//	cprintf("enter fat_get_root\n");
 	struct inode *node;
 	int fat_rootdev_num = 2;// set as 2...
-	cprintf("before fat_iget\n");
-	node = fat_iget(fat_rootdev_num, 2, 0);
-	cprintf("after fat_iget\n");
-	struct fat_inode *sin = vop_info(node, fat_inode);
-	cprintf("inum = %d\n", sin->inum);
+//	cprintf("before fat_iget\n");
+	node = fat_iget(fat_rootdev_num, 2, T_DIR,0);
+//	struct fat_inode *sin = vop_info(node, fat_inode);
+//	cprintf("inum = %d\n", sin->inum);
 	return node;
 }
 

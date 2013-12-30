@@ -35,7 +35,7 @@ extern struct icache_universal icache;//added 12.25
  */
 static const struct inode_ops *
 fat_get_ops(uint type) {
- //   cprintf("enter fat_get_ops type = %d, filetype = %d, dirtype=%d\n", type, FAT_TYPE_FILE, FAT_TYPE_DIR);
+//    cprintf("enter fat_get_ops type = %d, filetype = %d, dirtype=%d\n", type, T_FILE, T_DIR);
     switch (type) {
     case T_DIR:
         return &fat_node_dirops;
@@ -223,6 +223,7 @@ fat_calloc(uint dev)
   // Look for an empty cluster from fsi.Nxt_Free.
   bp = 0;
   lastsect = 0;
+//  cprintf("Nxt_Free = %d, TotSec32 = %d, SecPerClus = %d\n", fsi->Nxt_Free, bpb.TotSec32, bpb.SecPerClus);
   for(c = fsi->Nxt_Free; c < bpb.TotSec32 / bpb.SecPerClus; ++c){
     cprintf("cluster number = %d\n", c);
     cursect = fat_getFATEntry(&bpb, c, &secOff);
@@ -310,30 +311,30 @@ fat_iupdate(struct inode *ip)
   struct buf *fp, *sp;
   struct BPB bpb;
   struct DIR *de;
-  cprintf("iupdate1 \n");
+//  cprintf("iupdate1 \n");
   fat_readbpb(sin->dev, &bpb);
   fp = 0;
   do {
     s = fat_getFirstSectorofCluster(&bpb, cno);
     for (si = 0; si < bpb.SecPerClus; ++si) {   // Every sector
       sp = bread(sin->dev, s + si);
-      cprintf("iupdate2 data = %d\n", sp->data);
+ //     cprintf("iupdate2 data = %d\n", sp->data);
       for (de = (struct DIR*)sp->data;
            de < (struct DIR*)(sp->data + SECTSIZE);
            ++de) {          // Every entry
-        cprintf("before if FstClusHI = %d, Fstclulo = %d, inum = %d\n", de->FstClusHI, de->FstClusLO, sin->inum);
+ //       cprintf("before if FstClusHI = %d, Fstclulo = %d, inum = %d\n", de->FstClusHI, de->FstClusLO, sin->inum);
         if (((de->FstClusHI << 16) | de->FstClusLO) == sin->inum) {
           de->Attr = fat_mapType(sin->type);
           de->CrtDate = (ushort)sin->major;
           de->CrtTime = (ushort)sin->minor;
-          cprintf("iupdate, major = %d, minor = %d\n", de->CrtDate, de->CrtTime);
+ //         cprintf("iupdate, major = %d, minor = %d\n", de->CrtDate, de->CrtTime);
           if (!sin->size && sin->type != T_DIR) { // Init size of file and creat time
             de->FileSize = 1;
             de->CrtTimeTenth = 0x5A;
           } else {
             de->FileSize = sin->size;
           }
-          cprintf("iupdate3 \n");
+ //         cprintf("iupdate3 \n");
           bwrite(sp);
           brelse(sp);
           if (fp)
@@ -343,7 +344,7 @@ fat_iupdate(struct inode *ip)
       }
       brelse(sp);
     }
-    cprintf("iupdate4 \n");
+//    cprintf("iupdate4 \n");
     // Find FAT entry
     curFatsect = fat_getFATEntry(&bpb, cno, &secOff);
     if (curFatsect != lastFatsect) {
@@ -360,7 +361,7 @@ fat_iupdate(struct inode *ip)
 // Find the inode with number inum on device dev
 // and return the in-memory copy.
 struct inode*
-fat_iget(uint dev, uint inum, uint dircluster)
+fat_iget(uint dev, uint inum, short type, uint dircluster)
 {
   struct inode *ip, *empty;
   struct fat_inode *fip, *tip;////////////
@@ -371,7 +372,7 @@ fat_iget(uint dev, uint inum, uint dircluster)
   empty = 0;
   for(ip = &icache.inode[0]; ip < &icache.inode[NINODE]; ip++){
     fip = vop_info(ip, fat_inode);
- //   cprintf("IGET: fstype = %d, ref = %d, dev = %d, inum = %d\n", ip->fstype, fip->ref, fip->dev, fip->inum);
+//    cprintf("IGET: fstype = %d, ref = %d, dev = %d, inum = %d\n", ip->fstype, fip->ref, fip->dev, fip->inum);
     if(ip->fstype == FAT_INODE && fip->ref > 0 && fip->dev == dev && fip->inum == inum){
       fip->ref++;
       release(&icache.lock);
@@ -394,9 +395,14 @@ fat_iget(uint dev, uint inum, uint dircluster)
   tip->dircluster = dircluster;
   release(&icache.lock);
   // below added 12.27
-  fat_ilock(ip);
-  fat_iunlock(ip);
-  cprintf("tip type = %d, major = %d, minor = %d, nlink = %d, inum = %d\n", tip -> type, tip->major,tip->minor,tip->nlink, tip->inum);
+//  cprintf("fat_iget, type = %d\n", type);
+  if(type != 0){
+    tip->type = type;
+  }else{
+    fat_ilock(ip);
+    fat_iunlock(ip);
+  }
+//  cprintf("tip type = %d, major = %d, minor = %d, nlink = %d, inum = %d\n", tip -> type, tip->major,tip->minor,tip->nlink, tip->inum);
   vop_init(ip, fat_get_ops(tip->type), FAT_INODE);
 
   return ip;
@@ -444,14 +450,16 @@ fat_ilock(struct inode *ip)
     fp = 0;
     do {
       s = fat_getFirstSectorofCluster(&bpb, cno);
+ //     cprintf("secperclus = %d\n", bpb.SecPerClus);
       for (si = 0; si < bpb.SecPerClus; ++si) { // Every sector
+ //       cprintf("secnum = %d\n", si);
         sp = bread(sin->dev, s + si);
         for (de = (struct DIR*)sp->data;
              de < (struct DIR*)(sp->data + SECTSIZE);
              ++de) {          // Every entry
-          cprintf("before if FstClusHI = %d, Fstclulo = %d, inum = %d\n", de->FstClusHI, de->FstClusLO, sin->inum);
+   //       cprintf("ilock dirname = %s, FstClusHI = %d, Fstclulo = %d, inum = %d\n", de->Name, de->FstClusHI, de->FstClusLO, sin->inum);
           if (((de->FstClusHI << 16) | de->FstClusLO) == sin->inum) {
-            cprintf("ilock3\n");
+   //         cprintf("ilock3\n");
             sin->type = fat_mapAttr(de->Attr);
             sin->major = (short)de->CrtDate;
             sin->minor = (short)de->CrtTime;
@@ -516,6 +524,7 @@ fat_iput(struct inode *ip)
     release(&icache.lock);
     fat_itrunc(ip);/////////////////////////////////////
     sin->type = 0;
+ //   fat_iupdate(ip);
     acquire(&icache.lock);
     sin->flags = 0;
     wakeup(ip);//
@@ -663,6 +672,7 @@ fat_stati(struct inode *ip, struct stat *st)
   st->type = sin->type;
   st->nlink = sin->nlink;//added 12.25
   st->size = sin->size;
+  st->fstype = ip->fstype;
 }
 
 // Read data from inode.
@@ -830,7 +840,7 @@ void
 fat_getshortname(const char *s, char *namebuff)
 {
   uint len;
-  uint dotpos = DIRSIZ;
+  uint dotpos = FAT_DIRSIZ;
   uint namelen;
   uint extlen;
   uint i;
@@ -884,7 +894,7 @@ fat_updatename(uchar *name)
 int
 fat_namecmp(const char *s, const char *t)
 {
-  return strncmp(s, t, DIRSIZ);
+  return strncmp(s, t, FAT_DIRSIZ);
 }
 
 // Look for a directory entry in a directory.
@@ -901,13 +911,13 @@ fat_dirlookup(struct inode *dp, char *name, uint* poff)//modified 12.25
   struct buf *fp, *sp = 0;
   struct BPB bpb;
   struct LDIR *de;
-  char namebuf[DIRSIZ + 1]  = {0};
+  char namebuf[FAT_DIRSIZ + 1]  = {0};
   uchar chksum = 0;
   int ord = 0;
   int nbp = 0, i;
   
   fat_readbpb(fdp->dev, &bpb);
- // cprintf("fat_dirlookup1, ExtFlags= %d, FilSysType = %s\n", bpb.ExtFlags, bpb.FilSysType);
+//  cprintf("fat_dirlookup1, ExtFlags= %d, FilSysType = %s\n", bpb.ExtFlags, bpb.FilSysType);
   fp = 0;
   do {
     s = fat_getFirstSectorofCluster(&bpb, cno);
@@ -916,6 +926,7 @@ fat_dirlookup(struct inode *dp, char *name, uint* poff)//modified 12.25
       for (de = (struct LDIR*)sp->data;
            de < (struct LDIR*)(sp->data + SECTSIZE);
            ++de) {          // Every entry
+ //       cprintf("dirtype = %d\n", fat_getDIRType(de));
         switch (fat_getDIRType(de)) {
 
           case FAT_TYPE_VOLLBL:
@@ -927,7 +938,7 @@ fat_dirlookup(struct inode *dp, char *name, uint* poff)//modified 12.25
 
           case FAT_TYPE_LNAME:
             if (de->Ord & FAT_TYPE_LLNMASK) {    // Last Entry
-              nbp = DIRSIZ - 1;
+              nbp = FAT_DIRSIZ - 1;
               chksum = de->ChkSum;
               ord = de->Ord - FAT_TYPE_LLNMASK;
             } else if (chksum != de->ChkSum
@@ -943,6 +954,7 @@ fat_dirlookup(struct inode *dp, char *name, uint* poff)//modified 12.25
             break;
 
           default:
+ //           cprintf("name = %s, dename = %s\n", (char*)name, (char*)de);
             if (!fat_namecmp(name, namebuf + nbp)           // Long file name
                     || !strncmp((char*)name, (char*)de, 11)       // Short name with no \0
                     || !strncmp((char*)name, (char*)de, strlen(name))) {  // Short name with \0
@@ -963,7 +975,7 @@ fat_dirlookup(struct inode *dp, char *name, uint* poff)//modified 12.25
               if (fp)
                 brelse(fp);
               brelse(sp);
-              return fat_iget(fdp->dev, inum, fdp->inum);
+              return fat_iget(fdp->dev, inum, 0, fdp->inum);
             }
         }
       }
@@ -987,6 +999,7 @@ fat_dirlookup(struct inode *dp, char *name, uint* poff)//modified 12.25
 int
 fat_dirlink(struct inode *dp, char *name, struct inode *ip)
 {
+  cprintf("enter fat_dirlink\n");
   struct fat_inode *fdp = vop_info(dp, fat_inode);
   struct fat_inode *fip = vop_info(ip, fat_inode);
 
@@ -994,7 +1007,7 @@ fat_dirlink(struct inode *dp, char *name, struct inode *ip)
   uchar chksum;
   struct LDIR ldbuf[20];
   struct DIR dbuf;
-  ushort namebuf[DIRSIZ + 1] = {0};
+  ushort namebuf[FAT_DIRSIZ + 1] = {0};
   struct inode *tip;
 
   // Check that name is not present.
@@ -1011,7 +1024,7 @@ fat_dirlink(struct inode *dp, char *name, struct inode *ip)
       fat_updatename(dbuf.Name);
     }
     chksum = fat_getChkSum(dbuf.Name);
-    for (i = 0; i < DIRSIZ; ++i)
+    for (i = 0; i < FAT_DIRSIZ; ++i)
       namebuf[i] = 0xFFFF;
     len = strlen(name);
     for (i = 0; i < len; ++i)
@@ -1210,8 +1223,8 @@ fat_skipelem(char *path, char *name)
   while(*path != '/' && *path != 0)
     path++;
   len = path - s;
-  if(len >= DIRSIZ)
-    memmove(name, s, DIRSIZ);
+  if(len >= FAT_DIRSIZ)
+    memmove(name, s, FAT_DIRSIZ);
   else {
     memmove(name, s, len);
     name[len] = 0;
@@ -1238,14 +1251,19 @@ fat_namex(struct inode *ip, char *path, int nameiparent, char *name)// modified 
   // else
   //   ip = fat_idup(proc->cwd);
   
-  // if (*path == '.' && proc->cwd->inum == 2)
-  //   ++path;
+  if (*path == '.'){
+    struct inode *cnode = proc->cwd;
+    struct fat_inode *fnode = vop_info(cnode, fat_inode);
+    if(fnode->inum == 2){
+      ++path;
+    }
+  }
   // above: removed 12.25
 
   while((path = fat_skipelem(path, name)) != 0){
     fat_ilock(ip);
     fip = vop_info(ip, fat_inode);
-    cprintf("namex1: inum = %d\n", fip->inum);
+ //   cprintf("namex1: inum = %d\n", fip->inum);
     if(fip->type != T_DIR){
       fat_iunlockput(ip);
       return 0;
@@ -1264,10 +1282,10 @@ fat_namex(struct inode *ip, char *path, int nameiparent, char *name)// modified 
   }
   if(nameiparent){
     fat_iput(ip);
-    cprintf("namex4: inum = %d\n", fip->inum);
+ //   cprintf("namex4: inum = %d\n", fip->inum);
     return 0;
   }
-  cprintf("namex5: inum = %d\n", fip->inum);
+ // cprintf("namex5: inum = %d\n", fip->inum);
   return ip;
 }
 
@@ -1275,7 +1293,7 @@ struct inode*
 fat_namei(struct inode *node, char *path)// modified 12.25
 {
 //  cprintf("enter fatnamei\n");
-  char name[DIRSIZ];
+  char name[FAT_DIRSIZ];
   return fat_namex(node, path, 0, name);// modified 12.25
 }
 
@@ -1329,20 +1347,34 @@ fat_link_dec(struct inode *ip)
 }
 
 struct inode*
-fat_create_inode(struct inode *dirnode, short type, short major, short minor) {
+fat_create_inode(struct inode *dirnode, short type, short major, short minor, char* name) {
   cprintf("enter fat_create_inode major = %d, minor = %d\n", major, minor);
   struct inode *ip;
   struct fat_inode *dp = vop_info(dirnode, fat_inode);
   
-  if((ip = fat_iget(dp->dev, fat_calloc(dp->dev), dp->inum)) == 0)
+  if((ip = fat_iget(dp->dev, fat_calloc(dp->dev), type, dp->inum)) == 0)
     goto bad;
 
   struct fat_inode *fip = vop_info(ip, fat_inode);
-  fip->type = type;
+//  fip->type = type;
+//  vop_ilock(ip);
   fip->major = major;
   fip->minor = minor;
   fip->size = 0;
-  vop_iupdate(ip);
+  fip->nlink = 1;
+//  vop_iupdate(ip);
+  if(type == T_DIR){  // Create . and .. entries.
+    if(fat_dirlink(ip, ".", ip) < 0 || fat_dirlink(ip, "..", dirnode) < 0)
+      panic("create dots");
+  }
+
+  if(fat_dirlink(dirnode, name, ip) < 0)
+    panic("create: dirlink");
+
+  fat_ilock(ip);
+  fat_iupdate(ip);
+  if(dp->inum != 2)
+    fat_iupdate(dirnode);
   return ip;
 
 bad:
@@ -1382,6 +1414,7 @@ fat_getnlink(struct inode *node){
 
 int
 fat_unlink(struct inode *dp, char *name){
+  cprintf("enter fat_unlink\n");
   struct inode *ip;
 
   vop_ilock(dp);
@@ -1421,6 +1454,8 @@ bad:
 // The fat specific DIR operations correspond to the abstract operations on a inode.
 static const struct inode_ops fat_node_dirops = {
     .vop_magic                      = VOP_MAGIC,
+    .vop_read                       = fat_readi,
+    .vop_write                      = fat_writei,
     .vop_fstat                      = fat_stati,
     .vop_iupdate                    = fat_iupdate,
     .vop_ref_inc                    = fat_idup,

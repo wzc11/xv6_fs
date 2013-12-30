@@ -19,7 +19,7 @@ exec(char *path, char **argv)
   struct inode *ip;
   struct proghdr ph;
   pde_t *pgdir, *oldpgdir;
-  cprintf("enter lookup1\n");
+//  cprintf("enter lookup1\n");
   if((ip = vfs_lookup(path)) == 0)
   {
     return -1;
@@ -92,7 +92,7 @@ exec(char *path, char **argv)
   proc->tf->esp = sp;
   switchuvm(proc);
   freevm(oldpgdir);
-  cprintf("enter lookup5\n");
+//  cprintf("enter lookup5\n");
   return 0;
 
  bad:

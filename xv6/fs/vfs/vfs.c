@@ -22,9 +22,15 @@ vfs_get_curdir(struct inode **dir_store){
 int 
 vfs_get_root(const char *devname, struct inode **node_store) {
     struct inode *rooti;
-//	if(devname[0] == 'x'){
+	if(devname[0] == 's'){
+        rooti = sfs_get_root();
+	}
+    else if(devname[0] == 'f'){
         rooti = fat_get_root();
-//	}
+    }
+    else{
+        rooti = sfs_get_root();
+    }
     *node_store = rooti;
     return 0;
 }
@@ -32,7 +38,7 @@ vfs_get_root(const char *devname, struct inode **node_store) {
 int
 vfs_get_bootfs(struct inode **node_store) {
     struct inode *rooti;
-    rooti = fat_get_root();
+    rooti = sfs_get_root();
 
     *node_store = rooti;
     return 0;
@@ -48,7 +54,7 @@ static int
 get_device(char *path, char **subpath, struct inode **node_store) {
     int i, slash = -1, colon = -1;
     for (i = 0; path[i] != '\0'; i ++) {
-//        if (path[i] == ':') { colon = i; break; }
+        if (path[i] == ':') { colon = i; break; }
         if (path[i] == '/') { slash = i; break; }
     }
     if (colon < 0 && slash != 0) {
@@ -93,13 +99,13 @@ vfs_lookup(char *path) {
     if ((ret = get_device(path, &path, &node)) != 0) {
         return 0;
     }
-    cprintf("vfs_lookup1 fstype = %d, path = %s\n", node->fstype, path);
+//    cprintf("vfs_lookup1 fstype = %d, path = %s\n", node->fstype, path);
     if (*path != '\0') {
         struct inode *result = vop_namei(node, path);
-        cprintf("vfs_lookup getresult\n");
+  //      cprintf("vfs_lookup getresult\n");
         return result;
     }
-    cprintf("vfs_lookup2 fstype = %d\n", node->fstype);
+ //   cprintf("vfs_lookup2 fstype = %d\n", node->fstype);
     return node;
 }
 
@@ -114,7 +120,7 @@ vfs_lookup_parent(char *path, char *name){
     if ((ret = get_device(path, &path, &node)) != 0) {
         return 0;
     }
-    cprintf("vfs_lookup_parent fstype = %d\n", node->fstype);
+ //   cprintf("vfs_lookup_parent fstype = %d\n", node->fstype);
     return vop_nameiparent(node, path, name);
 }
 

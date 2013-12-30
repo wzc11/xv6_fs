@@ -244,7 +244,7 @@ sfs_iget(uint dev, uint inum, short type)
   empty = 0;
   for(ip = &icache.inode[0]; ip < &icache.inode[NINODE]; ip++){
     sip = vop_info(ip, sfs_inode);
-    cprintf("IGET: fstype = %d, ref = %d, dev = %d, inum = %d\n", ip->fstype, sip->ref, sip->dev, sip->inum);
+ //   cprintf("IGET: fstype = %d, ref = %d, dev = %d, inum = %d\n", ip->fstype, sip->ref, sip->dev, sip->inum);
     if(ip->fstype == SFS_INODE && sip->ref > 0 && sip->dev == dev && sip->inum == inum){
       sip->ref++;
       release(&icache.lock);
@@ -275,7 +275,7 @@ sfs_iget(uint dev, uint inum, short type)
     sfs_ilock(ip);
     sfs_iunlock(ip);
   }
-  cprintf("tip type = %d, major = %d, minor = %d, nlink = %d, inum = %d\n", sip -> type, sip->major,sip->minor,sip->nlink, sip->inum);
+//  cprintf("tip type = %d, major = %d, minor = %d, nlink = %d, inum = %d\n", sip -> type, sip->major,sip->minor,sip->nlink, sip->inum);
 //  cprintf("inum3 = %d\n", inum);
   vop_init(ip, sfs_get_ops(sip->type), SFS_INODE);
 //  cprintf("inum4 = %d\n", inum);
@@ -466,6 +466,7 @@ sfs_stati(struct inode *ip, struct stat *st)
   st->type = sin->type;
   st->nlink = sin->nlink;
   st->size = sin->size;
+  st->fstype = ip->fstype;
 }
 
 //PAGEBREAK!
@@ -830,7 +831,7 @@ sfs_link_dec(struct inode *ip)
 }
 
 struct inode*
-sfs_create_inode(struct inode *dirnode, short type, short major, short minor){
+sfs_create_inode(struct inode *dirnode, short type, short major, short minor, char* name){
 //  cprintf("enter sfs_create_inode\n");
   struct sfs_inode *sdirnode = vop_info(dirnode, sfs_inode);
   struct inode *ip = sfs_ialloc(dirnode, sdirnode->dev, type);
@@ -840,6 +841,16 @@ sfs_create_inode(struct inode *dirnode, short type, short major, short minor){
   sip->minor = minor;
   sip->nlink = 1;
   vop_iupdate(ip);
+  if(type == T_DIR){  // Create . and .. entries.
+    vop_link_inc(dirnode);  // for ".."
+    vop_iupdate(dirnode);
+    // No ip->nlink++ for ".": avoid cyclic ref count.
+    if(vop_dirlink(ip, ".", ip) < 0 || vop_dirlink(ip, "..", dirnode) < 0)
+      panic("create dots");
+  }
+
+  if(vop_dirlink(dirnode, name, ip) < 0)
+    panic("create: dirlink");
   return ip;
 }
 

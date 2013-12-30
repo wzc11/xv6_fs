@@ -10,6 +10,8 @@
 #define FAT_TYPE_ERROR   0xFF   // Erro Directory Entry// added 12.27
 #define FAT_TYPE_LNMASK  0x3F   // Long File Name Mask// added 12.27
 #define FAT_TYPE_LLNMASK 0x40   // Last Long File Name Mask// added 12.27
+#define SFS_INODE                         1
+#define FAT_INODE                         2
 
 struct stat {
   short type;  // Type of file
@@ -17,4 +19,5 @@ struct stat {
   uint ino;    // Inode number
   short nlink; // Number of links to file
   uint size;   // Size of file in bytes
+  int fstype;  
 };
