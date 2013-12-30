@@ -219,13 +219,13 @@ fat_calloc(uint dev)
   fat_readbpb(dev, &bpb);
   bfsi = bread(dev, bpb.FSInfo);
   fsi = (struct FSI*)bfsi->data;  
-  cprintf("enter fatcalloc, dev = %d\n", dev);
+//  cprintf("enter fatcalloc, dev = %d\n", dev);
   // Look for an empty cluster from fsi.Nxt_Free.
   bp = 0;
   lastsect = 0;
 //  cprintf("Nxt_Free = %d, TotSec32 = %d, SecPerClus = %d\n", fsi->Nxt_Free, bpb.TotSec32, bpb.SecPerClus);
   for(c = fsi->Nxt_Free; c < bpb.TotSec32 / bpb.SecPerClus; ++c){
-    cprintf("cluster number = %d\n", c);
+//    cprintf("cluster number = %d\n", c);
     cursect = fat_getFATEntry(&bpb, c, &secOff);
     if (cursect != lastsect){ // Is this sector in memory?
       if (bp)
@@ -244,7 +244,7 @@ fat_calloc(uint dev)
       --fsi->Free_Count;
       bwrite(bfsi);
       brelse(bfsi);
-      cprintf("calloc:find c= %d\n", c);
+  //    cprintf("calloc:find c= %d\n", c);
       return c;
     }
   }
@@ -268,7 +268,7 @@ fat_calloc(uint dev)
       --fsi->Free_Count;
       bwrite(bfsi);
       brelse(bfsi);
-      cprintf("calloc: cannot find\n");
+   //   cprintf("calloc: cannot find\n");
       return c;
     }
   }
@@ -322,7 +322,7 @@ fat_iupdate(struct inode *ip)
       for (de = (struct DIR*)sp->data;
            de < (struct DIR*)(sp->data + SECTSIZE);
            ++de) {          // Every entry
- //       cprintf("before if FstClusHI = %d, Fstclulo = %d, inum = %d\n", de->FstClusHI, de->FstClusLO, sin->inum);
+ //       cprintf("iupdate: FstClusHI = %d, Fstclulo = %d, inum = %d\n", de->FstClusHI, de->FstClusLO, sin->inum);
         if (((de->FstClusHI << 16) | de->FstClusLO) == sin->inum) {
           de->Attr = fat_mapType(sin->type);
           de->CrtDate = (ushort)sin->major;
@@ -457,7 +457,7 @@ fat_ilock(struct inode *ip)
         for (de = (struct DIR*)sp->data;
              de < (struct DIR*)(sp->data + SECTSIZE);
              ++de) {          // Every entry
-   //       cprintf("ilock dirname = %s, FstClusHI = %d, Fstclulo = %d, inum = %d\n", de->Name, de->FstClusHI, de->FstClusLO, sin->inum);
+      //    cprintf("ilock: FstClusHI = %d, Fstclulo = %d, inum = %d\n", de->FstClusHI, de->FstClusLO, sin->inum);
           if (((de->FstClusHI << 16) | de->FstClusLO) == sin->inum) {
    //         cprintf("ilock3\n");
             sin->type = fat_mapAttr(de->Attr);
@@ -905,7 +905,9 @@ fat_dirlookup(struct inode *dp, char *name, uint* poff)//modified 12.25
   struct fat_inode *fdp = vop_info(dp, fat_inode);
   if(fdp->type != T_DIR)
     panic("dirlookup not DIR");
-
+  if(fdp->inum == 2 && strncmp(name, "..", 2) == 0){
+    return dp;
+  }
   uint curFatsect, lastFatsect = 0, secOff;
   uint cno = fdp->inum, si, s, inum;
   struct buf *fp, *sp = 0;
@@ -995,11 +997,109 @@ fat_dirlookup(struct inode *dp, char *name, uint* poff)//modified 12.25
   return 0;
 }
 
+static int
+fat_inumtoname(struct inode *dp, int inum, char* name){
+  struct fat_inode *fdp = vop_info(dp, fat_inode);
+  uint cno = fdp->inum;
+  uint curFatsect, lastFatsect = 0, secOff;
+  uint si, s;
+  struct buf *fp, *sp;
+  struct BPB bpb;
+  struct DIR *de;
+//  cprintf("in inumtoname, inum = %d\n", fdp->inum);
+  fat_readbpb(fdp->dev, &bpb);
+  fp = 0;
+  do {
+    s = fat_getFirstSectorofCluster(&bpb, cno);
+    for (si = 0; si < bpb.SecPerClus; ++si) { // Every sector
+//       cprintf("secnum = %d\n", si);
+      sp = bread(fdp->dev, s + si);
+  //    cprintf("si = %d\n", si);
+      for (de = (struct DIR*)sp->data;
+           de < (struct DIR*)(sp->data + SECTSIZE);
+           ++de) {          // Every entry
+    //    cprintf("FstClusHI = %d, Fstclulo = %d, inum = %d\n", de->FstClusHI, de->FstClusLO, fdp->inum);
+        if (((de->FstClusHI << 16) | de->FstClusLO) == inum) {
+          safestrcpy(name, (char*)de->Name, 11);
+          return 0;
+        }
+      }
+      brelse(sp);
+    }
+    // Find FAT entry
+    curFatsect = fat_getFATEntry(&bpb, cno, &secOff);
+    if (curFatsect != lastFatsect) {
+      if (fp)
+        brelse(fp);
+      fp = bread(fdp->dev, curFatsect);
+      lastFatsect = curFatsect;
+    }
+    cno = *(uint*)(fp->data + secOff);
+  } while (!isEOF(cno));
+  brelse(fp);
+  return -1;
+}
+
+int
+fat_getpath(struct inode *node, char *path, int maxlen){
+//  cprintf("enter fat_getpath\n");
+  int ret, namelen;
+  int pos = maxlen - 2;
+  uint inum;
+  char *ptr = path + maxlen;
+  char namebuf[11];
+  struct fat_inode *fin = vop_info(node, fat_inode);
+  vop_ref_inc(node);
+  while(1){
+    struct inode *parent;
+    if((parent = fat_dirlookup(node, "..", 0)) == 0){
+      goto failed;
+    }
+//    cprintf("not failed\n");
+    inum = fin->inum;
+    vop_ref_dec(node);
+//    cprintf("after vop_ref_dec\n");
+    if(node == parent){
+      vop_ref_dec(node);
+      break;
+    }
+//    cprintf("before inumtoname\n");
+    node = parent;
+    fin = vop_info(node, fat_inode);
+    ret = fat_inumtoname(node, inum, namebuf);
+//    cprintf("getpath name = %s\n", namebuf);
+    if(ret != 0){
+//      cprintf("ret = %d\n", ret);
+      goto failed;
+    }
+    if((namelen = strlen(namebuf) + 1) > pos){
+      return -1;
+    }
+    pos -= namelen;
+    ptr -= namelen;
+    memcpy(ptr, namebuf, namelen -1);
+    ptr[namelen -1] = '/';
+  }
+  namelen = maxlen - pos - 2;
+  ptr = memmove(path + 5, ptr, namelen);
+  ptr[-1] = '/';
+  ptr[-2] = ':';
+  ptr[-3] = 't';
+  ptr[-4] = 'a';
+  ptr[-5] = 'f';
+  ptr[namelen] = '\0';
+  
+  return 0;
+failed:
+  vop_ref_dec(node);
+  return -1;
+}
+
 // Write a new directory entry (name, ip) into the directory dp.
 int
 fat_dirlink(struct inode *dp, char *name, struct inode *ip)
 {
-  cprintf("enter fat_dirlink\n");
+//  cprintf("enter fat_dirlink\n");
   struct fat_inode *fdp = vop_info(dp, fat_inode);
   struct fat_inode *fip = vop_info(ip, fat_inode);
 
@@ -1348,7 +1448,7 @@ fat_link_dec(struct inode *ip)
 
 struct inode*
 fat_create_inode(struct inode *dirnode, short type, short major, short minor, char* name) {
-  cprintf("enter fat_create_inode major = %d, minor = %d\n", major, minor);
+//  cprintf("enter fat_create_inode major = %d, minor = %d\n", major, minor);
   struct inode *ip;
   struct fat_inode *dp = vop_info(dirnode, fat_inode);
   
@@ -1414,7 +1514,7 @@ fat_getnlink(struct inode *node){
 
 int
 fat_unlink(struct inode *dp, char *name){
-  cprintf("enter fat_unlink\n");
+//  cprintf("enter fat_unlink\n");
   struct inode *ip;
 
   vop_ilock(dp);
@@ -1477,6 +1577,7 @@ static const struct inode_ops fat_node_dirops = {
     .vop_gettype                    = fat_gettype,
     .vop_getdev                     = fat_getdev,
     .vop_getnlink                   = fat_getnlink,
+    .vop_getpath                    = fat_getpath,
 }; 
 
 // The fatfs specific FILE operations correspond to the abstract operations on a inode.
@@ -1497,4 +1598,5 @@ static const struct inode_ops fat_node_fileops = {
     .vop_gettype                    = fat_gettype,
     .vop_getdev                     = fat_getdev,
     .vop_getnlink                   = fat_getnlink,
+    .vop_getpath                    = fat_getpath,
 };

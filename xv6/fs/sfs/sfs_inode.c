@@ -618,8 +618,12 @@ sfs_getpath(struct inode *node, char *path, int maxlen){
     ptr[namelen -1] = '/';
   }
   namelen = maxlen - pos - 2;
-  ptr = memmove(path + 1, ptr, namelen);
+  ptr = memmove(path + 5, ptr, namelen);
   ptr[-1] = '/';
+  ptr[-2] = ':';
+  ptr[-3] = 's';
+  ptr[-4] = 'f';
+  ptr[-5] = 's';
   ptr[namelen] = '\0';
   
   return 0;

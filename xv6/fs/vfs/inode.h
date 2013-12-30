@@ -20,8 +20,6 @@ struct icache_universal {
   struct inode inode[NINODE];
 };
 
-
-
 #define __vop_info(node, type)                                      \
     ({                                                              \
         struct inode *__node = (node);                              \

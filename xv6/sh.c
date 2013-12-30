@@ -155,14 +155,14 @@ getcmd(char *buf, int nbuf)
 int
 main(void)
 {
-  printf(2, "enter into sh main\n");
+//  printf(2, "enter into sh main\n");
   static char buf[100];
   int fd;
 //  printf(2, "enter into sh.c\n");
   // Assumes three file descriptors open.
   while((fd = open("console", O_RDWR)) >= 0){
     if(fd >= 3){
-      printf(2, "fd = %d\n", fd);
+ //     printf(2, "fd = %d\n", fd);
       close(fd);
       break;
     }

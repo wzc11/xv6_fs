@@ -22,10 +22,10 @@ vfs_get_curdir(struct inode **dir_store){
 int 
 vfs_get_root(const char *devname, struct inode **node_store) {
     struct inode *rooti;
-	if(devname[0] == 's'){
+	if(strncmp(devname, "sfs", 3)==0){
         rooti = sfs_get_root();
 	}
-    else if(devname[0] == 'f'){
+    else if(strncmp(devname, "fat", 3) == 0){
         rooti = fat_get_root();
     }
     else{
