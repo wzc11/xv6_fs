@@ -14,7 +14,9 @@ int open(char*, int);
 int mknod(char*, short, short);
 int unlink(char*);
 int fstat(int fd, struct stat*);
-int fchange(char*,char*,int);
+int copy(char*,char*);
+int move(char*,char*);
+int remove(char*,char*);
 int link(char*, char*);
 int mkdir(char*);
 int chdir(char*);
@@ -25,6 +27,9 @@ int sleep(int);
 int uptime(void);
 int halt(void);
 int getcwd(char*, int);
+int rmdir(char*);
+int touch(char*);
+int find(char*, char*);
 
 // ulib.c
 int stat(char*, struct stat*);

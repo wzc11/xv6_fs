@@ -239,9 +239,7 @@ sys_open(void)
     begin_trans();
     ip = create(path, T_FILE, 0, 0);
     commit_trans();
-//    cprintf("result = %d\n", ip);
     if(ip == 0){
-//      cprintf("hello world\n");
       return -1;
     }
   } else {
@@ -392,51 +390,231 @@ sys_getcwd(void)
 }
 
 int
-sys_fchange(void)
+sys_copy(void)
 {
-  int callnum;
-  argint(2,&callnum);
+  /*$cp a.txt b.txt  
+  cp是copy的简写，用来复制文件。在工作目录下，将a.txt复制到文件b.txt
+
+  $cp a.txt ..
+  将a.txt复制到父目录的a.txt  
+  */
+
   begin_trans();
-  if(callnum == 3)
+ 
+  char *srcpath, *destpath, destparentname[260];
+  struct inode *srcnode, *destptnode, *destnode;
+  if(argstr(0, &srcpath) < 0 || argstr(1, &destpath) < 0)
   {
-    char *srcpath, *destpath, destparentname[260];
-    struct inode *srcnode, *destptnode, *destnode;
-    if(argstr(0, &srcpath) < 0 || argstr(1, &destpath) < 0)
-    {
-      cprintf("cp: path error!\n");
-      commit_trans();
-      return -1;
+    cprintf("cp: path error!\n");
+    commit_trans();
+    return -1;
+  }
+  if((srcnode = vfs_lookup(srcpath)) == 0)
+  {
+    cprintf("cp: source file does not exits!\n");
+    commit_trans();
+    return -1;
+  }
+  if(vop_gettype(srcnode) != T_FILE)
+  {
+    cprintf("cp: source path is not a file!\n");
+    commit_trans();
+    return -1;
+  }
+  if((destnode = vfs_lookup(destpath)) && vop_gettype(destnode) == T_DIR)
+  {
+    char* srcfilename = &srcpath[strlen(srcpath)-1];
+    while(*srcfilename != '/' && srcfilename != srcpath){
+      srcfilename--;    
     }
-    if((srcnode = vfs_lookup(srcpath)) == 0)
+    char* destfullpath = &destpath[strlen(destpath)];
+    if(*srcfilename != '/')
     {
-      cprintf("cp: source file does not exits!\n");
-      commit_trans();
-      return -1;
+      *destfullpath = '/';
+      destfullpath++;
+    }   
+    while(*srcfilename != 0)
+    {
+      *destfullpath = *srcfilename;
+      destfullpath++;
+      srcfilename++;
     }
+    *destfullpath = 0;
+  }
+  else
+  {
     if((destptnode = vfs_lookup_parent(destpath, destparentname)) == 0)
     {
-      cprintf("cp: destination's parlsent path error!\n");
+      cprintf("cp: dest path error!\n");
       commit_trans();
       return -1;
-    }
-    if((destnode = create(destpath, 2, vop_getmajor(srcnode), vop_getminor(srcnode))) == 0)
-    {
-      cprintf("cp: can not create destination's inode!\n");
-      commit_trans();
-      return -1;
-    }
-    vop_iunlockput(destnode);
-    vop_ilock(srcnode);
-    int offset = 0, count;
-    char buf[512];  
-    while((count = vop_read(srcnode, buf, offset, 512)) > 0)
-    {
-      vop_write(destnode, buf, offset, count);
-      offset += 512;
-    }
-    vop_iunlock(srcnode);
-    vop_ref_dec(srcnode);
+    } 
   }
+  if((destnode = create(destpath, T_FILE, vop_getmajor(srcnode), vop_getminor(srcnode))) == 0)
+  {
+    cprintf("cp: can not create destination's inode!\n");
+    commit_trans();
+    return -1;
+  }
+  vop_iunlockput(destnode);
+  vop_ilock(srcnode);
+  int offset = 0, count;
+  char buf[512];  
+  while((count = vop_read(srcnode, buf, offset, 512)) > 0)
+  {
+    vop_write(destnode, buf, offset, count);
+    offset += 512;
+  }
+  vop_iunlock(srcnode);
+  vop_ref_dec(srcnode);
   commit_trans();
+  return 0;
+}
+
+int
+sys_move(void)
+{
+  /*$mv a.txt c.txt
+  mv是move的简写，用来移动文件。将a.txt移动成为c.txt (相当于重命名rename)
+
+  $mv c.txt /home/vamei
+  将c.txt移动到/home/vamei目录
+  */
+  begin_trans();
+ 
+  char *srcpath, *destpath, destparentname[260], srcparentname[260];
+  struct inode *srcnode, *destptnode, *destnode, *srcptnode;
+  if(argstr(0, &srcpath) < 0 || argstr(1, &destpath) < 0)
+  {
+    cprintf("mv: path error!\n");
+    commit_trans();
+    return -1;
+  }
+  if((srcnode = vfs_lookup(srcpath)) == 0)
+  {
+    cprintf("mv: source file does not exits!\n");
+    commit_trans();
+    return -1;
+  }
+  if(vop_gettype(srcnode) != T_FILE)
+  {
+    cprintf("mv: source path is not a file!\n");
+    commit_trans();
+    return -1;
+  }
+  if((destnode = vfs_lookup(destpath)) && vop_gettype(destnode) == T_DIR)
+  {
+    char* srcfilename = &srcpath[strlen(srcpath)-1];
+    while(*srcfilename != '/' && srcfilename != srcpath){
+      srcfilename--;    
+    }
+    char* destfullpath = &destpath[strlen(destpath)];
+    if(*srcfilename != '/')
+    {
+      *destfullpath = '/';
+      destfullpath++;
+    }   
+    while(*srcfilename != 0)
+    {
+      *destfullpath = *srcfilename;
+      destfullpath++;
+      srcfilename++;
+    }
+    *destfullpath = 0;
+  }
+  else
+  {
+    if((destptnode = vfs_lookup_parent(destpath, destparentname)) == 0)
+    {
+      cprintf("mv: dest path error!\n");
+      commit_trans();
+      return -1;
+    } 
+  }
+  if((destnode = create(destpath, T_FILE, vop_getmajor(srcnode), vop_getminor(srcnode))) == 0)
+  {
+    cprintf("mv: can not create destination's inode!\n");
+    commit_trans();
+    return -1;
+  }
+  vop_iunlockput(destnode);
+  vop_ilock(srcnode);
+  int offset = 0, count;
+  char buf[512];  
+  while((count = vop_read(srcnode, buf, offset, 512)) > 0)
+  {
+    vop_write(destnode, buf, offset, count);
+    offset += 512;
+  }
+  vop_iunlock(srcnode);
+  vop_ref_dec(srcnode);
+  if((srcptnode = vfs_lookup_parent(srcpath, srcparentname)) == 0)
+  {
+    cprintf("mv: src parent path error!\n");
+    commit_trans();
+    return -1;
+  } 
+  vop_unlink(srcptnode, srcpath);
+  commit_trans();
+  return 0;
+}
+
+int
+sys_remove(void)
+{
+  return 0;
+}
+
+int sys_rmdir(void)
+{
+  char *dirpath;
+  struct inode *dirnode;
+  if(argstr(0, &dirpath) < 0)
+  {
+    cprintf("rmdir: path error!\n");
+    return -1;
+  }
+  if((dirnode = vfs_lookup(dirpath)) == 0)
+  {
+    cprintf("rmdir: source dir does not exits!\n");
+    return -1;
+  }
+  if(vop_gettype(dirnode) != T_DIR)
+  {
+    cprintf("rmdir: source path is not a directory!\n");
+    return -1;
+  }
+  /*if(sys_unlink(dirpath) < 0){
+    cprintf("rmdir: %s not empty failed to delete\n", path);
+    return -1;
+  }*/ //weiwan!!!
+  return 0;
+}
+
+int sys_touch(void)
+{
+  begin_trans();
+  struct inode *ip;
+  char *path;
+  if(argstr(0, &path) < 0)
+  {
+    cprintf("touch: path error!\n");
+    commit_trans();
+    return -1;
+  }
+
+  if((ip = create(path, T_FILE, 0, 0)) == 0)
+  {
+    cprintf("touch: can not create inode!\n");
+    commit_trans();
+    return -1;
+  }
+  vop_iunlockput(ip);
+  commit_trans();
+  return 0;
+}
+
+int sys_find(void)
+{
   return 0;
 }

@@ -8,9 +8,10 @@ main(int argc, char *argv[])
   int i;
 
   if(argc < 2){
-    printf(2, "Usage: rm files...\n");
+    printf(2, "Usage: rm files or rm -r dir...\n");
     exit();
   }
+
 
   for(i = 1; i < argc; i++){
     if(unlink(argv[i]) < 0){
@@ -19,5 +20,6 @@ main(int argc, char *argv[])
     }
   }
 
+  //remove(argv[2]);
   exit();
 }

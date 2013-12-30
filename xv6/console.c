@@ -209,6 +209,18 @@ consoleintr(int (*getc)(void))
         consputc(BACKSPACE);
       }
       break;
+    case 'C':
+      input.w = input.e;
+      input.buf[input.e++ % INPUT_BUF] = 'c';
+      input.w = input.e;
+      wakeup(&input.r);
+      break;
+    case 'Q':
+      input.w = input.e;
+      input.buf[input.e++ % INPUT_BUF] = 'q';
+      input.w = input.e;
+      wakeup(&input.r);
+      break;
     default:
       if(c != 0 && input.e-input.r < INPUT_BUF){
         c = (c == '\r') ? '\n' : c;
