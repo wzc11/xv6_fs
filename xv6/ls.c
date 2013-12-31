@@ -236,6 +236,7 @@ ls(char *path)
     break;
   }
 //  printf(2, "stfstype = %d\n", st.fstype);
+//  printf(1, "before closefd\n");
   close(fd);
 }
 

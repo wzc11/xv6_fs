@@ -144,7 +144,16 @@ runcmd(struct cmd *cmd)
 int
 getcmd(char *buf, int nbuf)
 {
-  printf(2, "$ ");
+  int path_max = 100;
+  char current_work_dir[path_max];
+  memset(current_work_dir, 0, path_max);
+  if (getcwd(current_work_dir,path_max) != 0){
+    printf(2, "$ ");
+  }
+  else{
+    current_work_dir[strlen(current_work_dir)-1]='\0';
+    printf(2, "%s$ ", current_work_dir);
+  }
   memset(buf, 0, nbuf);
   gets(buf, nbuf);
   if(buf[0] == 0) // EOF

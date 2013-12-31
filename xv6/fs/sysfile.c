@@ -190,6 +190,7 @@ bad:
 static struct inode*
 create(char *path, short type, short major, short minor)
 {
+ // cprintf("enter create0, path = %s\n",path);
   uint off;
   struct inode *ip, *dp;
   char name[DIRSIZ];
@@ -197,8 +198,10 @@ create(char *path, short type, short major, short minor)
   if((dp = vfs_lookup_parent(path, name)) == 0)
     return 0;
   vop_ilock(dp);
-
+  
+ // cprintf("enter create, path = %s, dptype = %d, name = %s\n",path, dp->fstype, name);
   if((ip = vop_dirlookup(dp, name, &off)) != 0){
+ //   cprintf("failed");
     vop_iunlockput(dp);
     vop_ilock(ip);
     if(type == T_FILE && vop_gettype(ip) == T_FILE)
@@ -206,13 +209,10 @@ create(char *path, short type, short major, short minor)
     vop_iunlockput(ip);
     return 0;
   }
-
+//  cprintf("enter create2\n");
   if((ip = vop_create_inode(dp, type, major, minor, name)) == 0)
     panic("create: ialloc");
-
-  
-  
-
+ // cprintf("after create\n");
   vop_iunlockput(dp);
   return ip;
 }
@@ -395,28 +395,37 @@ sys_copy(void)
 
   begin_trans();
  
-  char *srcpath, *destpath, destparentname[260];
-  struct inode *srcnode, *destptnode, *destnode;
+  char *srcpath, *destpath, temppath[100];// destparentname[260];
+  struct inode *srcnode, *destnode;// *destptnode;
+  memset(temppath, 0, 100);
+//  cprintf("enter sys_copy1\n");
   if(argstr(0, &srcpath) < 0 || argstr(1, &destpath) < 0)
   {
     cprintf("cp: path error!\n");
     commit_trans();
     return -1;
   }
+///  cprintf("enter sys_copy2 src=%s, dest=%s\n",srcpath, destpath);
   if((srcnode = vfs_lookup(srcpath)) == 0)
   {
     cprintf("cp: source file does not exits!\n");
     commit_trans();
     return -1;
   }
+// cprintf("enter sys_copy3\n");
   if(vop_gettype(srcnode) != T_FILE)
   {
     cprintf("cp: source path is not a file!\n");
     commit_trans();
     return -1;
   }
-  if((destnode = vfs_lookup(destpath)) && vop_gettype(destnode) == T_DIR)
+// cprintf("enter sys_copy4\n");
+  strncpy((char*)temppath, destpath, strlen(destpath));
+  
+  if((destnode = vfs_lookup(temppath)) && vop_gettype(destnode) == T_DIR)
   {
+  //  vop_iunlockput(destptnode);
+    cprintf("dest is directory\n");
     char* srcfilename = &srcpath[strlen(srcpath)-1];
     while(*srcfilename != '/' && srcfilename != srcpath){
       srcfilename--;    
@@ -434,15 +443,17 @@ sys_copy(void)
       srcfilename++;
     }
     *destfullpath = 0;
+    cprintf("end of dest is destpath = %s\n", destpath);
   }
   else
   {
-    if((destptnode = vfs_lookup_parent(destpath, destparentname)) == 0)
-    {
-      cprintf("cp: dest path error!\n");
-      commit_trans();
-      return -1;
-    } 
+   // cprintf("enter sys_copy5 destpath = %s\n", destpath);
+    // if((destptnode = vfs_lookup_parent(destpath, destparentname)) == 0)
+    // {
+    //   cprintf("cp: dest path error!\n");
+    //   commit_trans();
+    //   return -1;
+    // } 
   }
   if((destnode = create(destpath, T_FILE, vop_getmajor(srcnode), vop_getminor(srcnode))) == 0)
   {
@@ -450,15 +461,19 @@ sys_copy(void)
     commit_trans();
     return -1;
   }
+ // cprintf("enter sys_copy6\n");
   vop_iunlockput(destnode);
   vop_ilock(srcnode);
   int offset = 0, count;
   char buf[512];  
+//  cprintf("srctype = %d, desttype = %d\n", srcnode->fstype, destnode->fstype);
   while((count = vop_read(srcnode, buf, offset, 512)) > 0)
   {
+  //  cprintf("count = %d\n, offset=%d", count, offset);
     vop_write(destnode, buf, offset, count);
     offset += 512;
   }
+//  cprintf("enter sys_copy7\n");
   vop_iunlock(srcnode);
   vop_ref_dec(srcnode);
   commit_trans();
@@ -476,8 +491,8 @@ sys_move(void)
   */
   begin_trans();
  
-  char *srcpath, *destpath, destparentname[260], srcparentname[260];
-  struct inode *srcnode, *destptnode, *destnode, *srcptnode;
+  char *srcpath, *destpath, srcparentname[260], temppath[100];// destparentname[260];
+  struct inode *srcnode, *destnode, *srcptnode;//, *destptnode;
   if(argstr(0, &srcpath) < 0 || argstr(1, &destpath) < 0)
   {
     cprintf("mv: path error!\n");
@@ -496,7 +511,9 @@ sys_move(void)
     commit_trans();
     return -1;
   }
-  if((destnode = vfs_lookup(destpath)) && vop_gettype(destnode) == T_DIR)
+
+  strncpy((char*)temppath, destpath, strlen(destpath));
+  if((destnode = vfs_lookup(temppath)) && vop_gettype(destnode) == T_DIR)
   {
     char* srcfilename = &srcpath[strlen(srcpath)-1];
     while(*srcfilename != '/' && srcfilename != srcpath){
@@ -518,12 +535,12 @@ sys_move(void)
   }
   else
   {
-    if((destptnode = vfs_lookup_parent(destpath, destparentname)) == 0)
-    {
-      cprintf("mv: dest path error!\n");
-      commit_trans();
-      return -1;
-    } 
+    // if((destptnode = vfs_lookup_parent(destpath, destparentname)) == 0)
+    // {
+    //   cprintf("mv: dest path error!\n");
+    //   commit_trans();
+    //   return -1;
+    // } 
   }
   if((destnode = create(destpath, T_FILE, vop_getmajor(srcnode), vop_getminor(srcnode))) == 0)
   {

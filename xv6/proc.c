@@ -100,7 +100,6 @@ userinit(void)
 
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = vfs_lookup("/");
-  cprintf("userinit after lookup\n");
   p->state = RUNNABLE;
 }
 

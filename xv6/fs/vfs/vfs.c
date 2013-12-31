@@ -16,16 +16,18 @@ vfs_get_curdir(struct inode **dir_store){
     node = proc -> cwd;
     vop_ref_inc(node);
     *dir_store = node;
+ //   cprintf("cur fstype = %d\n", node->fstype);
     return 0;
 }
 
 int 
 vfs_get_root(const char *devname, struct inode **node_store) {
     struct inode *rooti;
-	if(strncmp(devname, "sfs", 3)==0){
+	if(strncmp(devname, "sfs", 3)==0 || strncmp(devname, "SFS", 3)==0){
         rooti = sfs_get_root();
 	}
-    else if(strncmp(devname, "fat", 3) == 0){
+    else if(strncmp(devname, "fat", 3) == 0 || strncmp(devname, "FAT", 3)==0){
+        cprintf("fat_get_root\n");
         rooti = fat_get_root();
     }
     else{
@@ -102,7 +104,7 @@ vfs_lookup(char *path) {
 //    cprintf("vfs_lookup1 fstype = %d, path = %s\n", node->fstype, path);
     if (*path != '\0') {
         struct inode *result = vop_namei(node, path);
-  //      cprintf("vfs_lookup getresult\n");
+//        cprintf("vfs_lookup getresult, path = %s\n", path);
         return result;
     }
  //   cprintf("vfs_lookup2 fstype = %d\n", node->fstype);
