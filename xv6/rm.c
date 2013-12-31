@@ -12,14 +12,25 @@ main(int argc, char *argv[])
     exit();
   }
 
-
-  for(i = 1; i < argc; i++){
-    if(unlink(argv[i]) < 0){
-      printf(2, "rm: %s failed to delete\n", argv[i]);
-      break;
+  // modified: 12.30 15:00
+  if (strcmp(argv[1], "-r") == 0 || strcmp(argv[1], "-R") == 0) { // with -r
+    if (argc != 3) { // wrong usage
+      printf(2, "rm: too much arguments...\n");
+      exit();
+    } else { // remove folder
+      if (remove(argv[2]) < 0) {
+        printf(2, "rm: %s failed to delete folder\n", argv[2]);
+        exit();
+      }
+    }
+  } else { // without -r
+    for(i = 1; i < argc; i++){
+      if(unlink(argv[i]) < 0){
+        printf(2, "rm: %s failed to delete\n", argv[i]);
+        exit();
+      }
     }
   }
 
-  //remove(argv[2]);
   exit();
 }

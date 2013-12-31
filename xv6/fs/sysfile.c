@@ -570,10 +570,388 @@ sys_move(void)
   return 0;
 }
 
+// sb serie: sys_ with argument(s)
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////// start sb
+int
+sb_unlink(char *path) {
+  struct inode *dp;
+  char name[DIRSIZ];
+
+  // trans no need !!!!!!!!
+  // lock no need !!!!!! alredy
+
+  if((dp = vfs_lookup_parent(path, name)) == 0)
+    return -1;
+  // cprintf("in sbunlink pass lookupparent successfully\n");
+
+  // cprintf("dp=%d\npath=%s\nname=%s\n", dp, path, name);
+  if(vop_unlink(dp, name) != 0)
+    goto bad;
+  // cprintf("in sbunlink pass vopunlink successfully\n");
+
+  return 0;
+
+bad:
+  return -1;
+}
+
+int
+sb_open(char* path, int omode) {
+  int fd;
+  struct file *f;
+  struct inode *ip;
+
+  if(omode & O_CREATE){
+    begin_trans();
+    ip = create(path, T_FILE, 0, 0);
+    commit_trans();
+    if(ip == 0){
+      return -1;
+    }
+  } else {
+    // cprintf("in sbopen path=%s\n", path);
+    if((ip = vfs_lookup(path)) == 0)
+      return -1;
+    // cprintf("in sbopen pass lookup successfully\n");
+    vop_ilock(ip);
+    // cprintf("in sbopen pass lock successfully\n");
+    if(vop_open(ip, omode) != 0){
+      vop_iunlockput(ip);
+      return -1;
+    }
+  }
+  if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
+    if(f)
+      fileclose(f);
+    vop_iunlockput(ip);
+    return -1;
+  }
+  vop_iunlock(ip);
+
+  f->type = FD_INODE;
+  f->ip = ip;
+  f->off = 0;
+  f->readable = !(omode & O_WRONLY);
+  f->writable = (omode & O_WRONLY) || (omode & O_RDWR);
+  // cprintf("finish sbopen\n");
+  return fd;
+}
+
+int
+sb_fstat(int fd, struct stat* st) {
+  struct file* f;
+  if ((f = proc->ofile[fd]) == 0)
+    return -1;
+  return filestat(f, st);
+}
+
+char*
+sb_strcpy(char *s, char *t) {
+  char *os;
+  os = s;
+  while((*s++ = *t++) != 0)
+    ; // until
+  return os;
+}
+
+int
+sb_read(int fd, void* p, int n) {
+  struct file *f;
+  if ((f = proc->ofile[fd]) == 0)
+    return -1;
+  return fileread(f, p, n);
+}
+
+int
+sb_close(int fd) {
+  struct file *f;
+
+  if (fd < 0 || fd >= NOFILE || (f=proc->ofile[fd]) == 0)
+    return -1;
+
+  proc->ofile[fd] = 0;
+  fileclose(f);
+  return 0;
+}
+
+int
+sb_stat(char *n, struct stat *st) {
+  int fd;
+  int r;
+
+  fd = sb_open(n, O_RDONLY);
+  if(fd < 0)
+    return -1;
+  r = sb_fstat(fd, st);
+  sb_close(fd);
+  return r;
+}
+
+uint
+sb_strlen(char *s) {
+  int n;
+  for(n = 0; s[n]; n++)
+    ; // until
+  return n;
+}
+
+int
+sb_strcmp(const char *p, const char *q) {
+  while(*p && *p == *q)
+    p++, q++;
+  return (uchar)*p - (uchar)*q;
+}
+
+int sb_strcat(char *des, char* src) {
+  int i, dlen, slen;
+  dlen = sb_strlen(des);
+  slen = sb_strlen(src);
+  for (i = 0; i < slen; i++) {
+    des[dlen+i] = src[i];
+  }
+  des[dlen+slen] = 0;
+  return 0;
+}
+
+char*
+sb_fmtname(char *path) {
+  static char sbbuf[DIRSIZ+1];
+  char *p;
+  for (p = path + strlen(path); p >= path && *p != '/'; p--)
+    ; // until
+  p++;
+  if (strlen(p) >= DIRSIZ)
+    return p;
+  memmove(sbbuf, p, strlen(p));
+  memset(sbbuf + strlen(p), ' ', DIRSIZ-strlen(p));
+  return sbbuf;
+}
+
+int
+sb_remove(char* path) {
+  struct inode *dp;
+  char name[DIRSIZ];
+  uint off;
+  int fstype;
+
+  if((dp = vfs_lookup_parent(path, name)) == 0) {
+    cprintf("sbremove: can't remove root folder\n");
+    return -1;
+  }
+
+  // trans no need !!!!!!!!!
+  // lock dp no need !!!!!! alredy
+
+  struct inode* ip;
+  char buf[512], *p;
+  int fd;
+  struct stat st;
+  char combine[512];
+  
+  struct sfs_dirent sfs_de;
+
+  // struct LDIR fat_de;
+  // struct DIR *dir;
+  // char namebuf[DIRSIZ + 1] = {0};
+  // uchar chksum = 0;
+  // int ord = 0;
+  // int nbp = 0, i;
+
+  //vop_ilock(dp);
+  if (namecmp(name, ".") == 0 || namecmp(name, "..") == 0)
+    goto bad;
+  if ((ip = vop_dirlookup(dp, name, &off)) == 0)
+    goto bad;
+  fstype = dp->fstype;
+  //vop_iunlockput(dp);
+  
+  // struct sfs_inode *tip = vop_info(ip, sfs_inode);
+  // cprintf("ip type is %d for %s\n", tip->type, path);
+  vop_ilock(ip);
+  // cprintf("buonanotte: %s\n", path);
+  if (vop_getnlink(ip) < 1) {
+    cprintf("sbremove: vop_getnlink less than 1\n");
+    goto bad;
+  }
+  // vop_link_dec(ip);
+  if (vop_gettype(ip) == T_FILE) {
+    vop_iunlockput(ip);
+    sb_unlink(path);
+    // cprintf("remove: argument should be dir\n");
+    return -1;
+  } else {// ip is a dir
+    if (vop_isdirempty(ip)) { // ip is empty
+      // struct sfs_inode *tip = vop_info(ip, sfs_inode);
+      // cprintf("ip type is %d for %s\n", tip->type, path);
+      vop_iunlockput(ip);
+      // cprintf("we can also use rm -r to remove empty folder -> %s\n", name);
+      // sb_unlink(name);
+      sb_unlink(path);
+    } else { // ip is non-empty
+      vop_iunlockput(ip);
+      if (fstype == SFS_INODE) {
+        // cprintf("we can only use rm -r in sfs\n");
+        if ((fd = sb_open(path, 0)) < 0) {//
+          cprintf("sbremove: can't open\n");
+          goto bad;
+        }
+        if (sb_fstat(fd, &st) < 0) {
+          cprintf("sbremove: can't stat\n");
+          goto bad;
+        }
+        if (strlen(name)+1+DIRSIZ+1 > sizeof buf) {
+          cprintf("sbremove: path too long\n");
+          goto bad;
+        }
+        sb_strcpy(buf, name);
+        p = buf + strlen(buf);
+        *p++ = '/';
+        while (sb_read(fd, &sfs_de, sizeof(sfs_de)) == sizeof(sfs_de)) {
+          if (sfs_de.inum == 0)
+            continue;
+          if (sb_strcmp(sfs_de.name, ".") == 0 || sb_strcmp(sfs_de.name, "..") == 0)
+            continue;
+          memmove(p, sfs_de.name, DIRSIZ);
+          p[DIRSIZ] = 0;
+          // rebuild full path
+          sb_strcpy(combine, "");
+          sb_strcat(combine, path);
+          sb_strcat(combine, "/");
+          sb_strcat(combine, sfs_de.name);
+          // cprintf("sbremove:before sbstat path=%s\n", path);
+          // cprintf("sbremove:before sbstat combine=%s\n", combine);
+          sb_remove(combine);
+          sb_unlink(path);
+        } // end while
+      }
+      else if (fstype == FAT_INODE) {
+        //...
+        cprintf("sbremove: fat not yet\n");
+        goto bad;
+      }
+      else {
+        cprintf("sbremove: invalid inode type\n");
+        goto bad;
+      }
+    } // endif (empty or not)
+  }
+
+  return 0;
+
+bad:
+  return -1;
+}
+///////////////////////////////////////////////////////////////////////// end sb
+
+// modified: 12.30 16:00
 int
 sys_remove(void)
 {
+  struct inode *dp;
+  char name[DIRSIZ], *path;
+  uint off;
+  int fstype;
+
+  if (argstr(0, &path) < 0) {
+    cprintf("remove: wrong path arg\n");
+    return -1;
+  }
+  if((dp = vfs_lookup_parent(path, name)) == 0) {
+    cprintf("remove: can't remove root folder\n");
+    return -1;
+  }
+
+  begin_trans();
+
+  struct inode* ip;
+  char buf[512], *p;
+  int fd;
+  struct stat st;
+  
+  struct sfs_dirent sfs_de;
+
+  // struct LDIR fat_de;
+  // struct DIR *dir;
+  // char namebuf[DIRSIZ + 1] = {0};
+  // uchar chksum = 0;
+  // int ord = 0;
+  // int nbp = 0, i;
+
+  vop_ilock(dp);
+  if (namecmp(name, ".") == 0 || namecmp(name, "..") == 0)
+    goto bad;
+  if ((ip = vop_dirlookup(dp, name, &off)) == 0)
+    goto bad;
+
+  fstype = dp->fstype;
+  vop_iunlockput(dp);
+  
+  vop_ilock(ip);
+  if (vop_getnlink(ip) < 1) {
+    cprintf("remove: vop_getnlink less than 1\n");
+    goto bad;
+  }
+  // vop_link_dec(ip);
+  // no need to iupdate before iunlockput !!!!!!
+  if (vop_gettype(ip) == T_FILE) {
+    vop_iunlockput(ip);
+    sb_unlink(name);
+    return -1;
+  } else {// ip is a dir
+    if (vop_isdirempty(ip)) { // ip is empty
+      vop_iunlockput(ip);
+      sb_unlink(name);
+    } else { // ip is non-empty
+      vop_iunlockput(ip);
+      if (fstype == SFS_INODE) {
+        if ((fd = sb_open(path, 0)) < 0) {
+          cprintf("remove: can't open\n");
+          goto bad;
+        }
+        if (sb_fstat(fd, &st) < 0) {
+          cprintf("remove: can't stat\n");
+          goto bad;
+        }
+        if (strlen(name)+1+DIRSIZ+1 > sizeof buf) {
+          cprintf("remove: path too long\n");
+          goto bad;
+        }
+        sb_strcpy(buf, name);
+        p = buf + strlen(buf);
+        *p++ = '/';
+        while (sb_read(fd, &sfs_de, sizeof(sfs_de)) == sizeof(sfs_de)) {
+          if (sfs_de.inum == 0)
+            continue;
+          if (sb_strcmp(sfs_de.name, ".") == 0 || sb_strcmp(sfs_de.name, "..") == 0)
+            continue;
+          memmove(p, sfs_de.name, DIRSIZ);
+          p[DIRSIZ] = 0;
+          // cprintf("path=%s ", path);
+          // cprintf("buf=%s ", buf);
+          // cprintf("buftail=%s ", sb_fmtname(buf));
+          // cprintf("name=%s\n", name);
+          sb_remove(buf);
+          sb_unlink(name);
+        } // end while
+      }
+      else if (fstype == FAT_INODE) {
+        //...
+        cprintf("remove: fat not yet\n");
+        goto bad;
+      }
+      else {
+        cprintf("remove: invalid inode type\n");
+        goto bad;
+      }
+    } // endif (empty or not)
+  }
+
+  commit_trans();
   return 0;
+
+bad:
+  commit_trans();
+  return -1;
 }
 
 int sys_rmdir(void)

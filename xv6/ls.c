@@ -131,7 +131,14 @@ void sfs_ls(char *path, int fd, struct stat st)
         printf(1, "ls: cannot stat %s\n", buf);
         continue;
       }
-      printf(1, "%s %d %d %d\n", fmtname(buf), st.type, st.ino, st.size);
+
+      if (st.type == T_DIR) {
+        printf(1, "%s DIR  %d %d\n", fmtname(buf), st.ino, st.size);
+      } else if (st.type == T_FILE) {
+        printf(1, "%s FILE %d %d\n", fmtname(buf), st.ino, st.size);
+      } else {
+        printf(1, "%s DEV  %d %d\n", fmtname(buf), st.ino, st.size);
+      }
     }
     break;
   }
@@ -205,8 +212,14 @@ void fat_ls(char *path, int fd, struct stat st)
           year=getYear(dir->CrtDate);
           month=getMonth(dir->CrtDate);
           day=getDay(dir->CrtDate);
-          printf(1, "%s %d %d %d %d-%d-%d %d:%d:%d\n", fmtname(buf), st.type, st.ino,
-                 st.size,year,month,day,hour,minute,second);
+          if (st.type == T_DIR) {
+            printf(1, "%s DIR  %d %d %d-%d-%d %d:%d:%d\n", fmtname(buf), st.ino, st.size,year,month,day,hour,minute,second);
+          } else if (st.type == T_FILE) {
+            printf(1, "%s FILE %d %d %d-%d-%d %d:%d:%d\n", fmtname(buf), st.ino, st.size,year,month,day,hour,minute,second);
+          } else {
+            printf(1, "%s DEV  %d %d %d-%d-%d %d:%d:%d\n", fmtname(buf), st.ino, st.size,year,month,day,hour,minute,second);
+          }
+          
       }
     }
     break;

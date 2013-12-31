@@ -1080,6 +1080,8 @@ fat_inumtoname(struct inode *dp, int inum, char* name){
         if (((de->FstClusHI << 16) | de->FstClusLO) == inum) {
      //     cprintf("raw name = %s\n", (char*)de->Name);
           copyshortname(name, (char*)de->Name);
+          if (fp)
+            brelse(fp);
           brelse(sp);
           return 0;
         }

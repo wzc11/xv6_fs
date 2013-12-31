@@ -16,7 +16,7 @@ int unlink(char*);
 int fstat(int fd, struct stat*);
 int copy(char*,char*);
 int move(char*,char*);
-int remove(char*,char*);
+int remove(char*);
 int link(char*, char*);
 int mkdir(char*);
 int chdir(char*);

@@ -27,7 +27,7 @@ vfs_get_root(const char *devname, struct inode **node_store) {
         rooti = sfs_get_root();
 	}
     else if(strncmp(devname, "fat", 3) == 0 || strncmp(devname, "FAT", 3)==0){
-        cprintf("fat_get_root\n");
+        // cprintf("fat_get_root\n");
         rooti = fat_get_root();
     }
     else{
